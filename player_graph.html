@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>젤리🐛의 내전 도우미 · 유저 프로필 리포트</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐛</text></svg>">
+
+  <style>
+    /* ===== j-lol mini nav ===== */
+    .jl-mini-nav{ max-width:1100px; margin:8px auto 18px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+    .jl-mini-card{ display:inline-flex; align-items:center; gap:8px; padding:10px 12px; border-radius:12px; background:#0f172a; color:#e5e7eb; text-decoration:none; border:1px solid #1f2937; box-shadow:0 2px 10px rgba(0,0,0,.18); font-size:14px; line-height:1; transition:.12s transform,.12s border-color,.12s box-shadow; }
+    .jl-mini-card:hover{ transform:translateY(-1px); border-color:#334155; }
+    .jl-mini-card.is-active{ border-color:#60a5fa; box-shadow:0 0 0 2px rgba(96,165,250,.25) inset, 0 2px 10px rgba(0,0,0,.2); }
+    .jl-mini-ico{ font-size:16px; opacity:.95; }
+    .jl-mini-badge{ font-size:11px; padding:2px 6px; border-radius:999px; margin-left:4px; background:#1f2937; color:#cbd5e1; }
+    @media (prefers-color-scheme: light){
+      .jl-mini-card{ background:#ffffff; color:#0f172a; border-color:#e5e7eb; }
+      .jl-mini-card.is-active{ border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.2) inset; }
+      .jl-mini-badge{ background:#eef2ff; color:#1e40af; }
+    }
+
+    body { font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif; background:#0b1220; color:#e2e8f0; margin:0; padding:16px; overflow-x:hidden; }
+    h1 { color:#60a5fa; margin:8px 0 16px; text-align:center; }
+    .sub-hint { text-align:center; color:#94a3b8; font-size:13px; margin-bottom:20px; }
+
+    /* 좌우 스크롤 컨테이너 (마우스 드래그 & 휠 & 자동 롤링) */
+    .card-track-container {
+      width: 100%;
+      overflow-x: auto; /* 컨테이너 자체에 가로 스크롤 부여 */
+      overflow-y: hidden;
+      cursor: grab;
+      user-select: none;
+      scrollbar-width: none; /* Firefox 스크롤바 숨김 */
+      -ms-overflow-style: none; /* IE 스크롤바 숨김 */
+    }
+    .card-track-container::-webkit-scrollbar { display: none; } /* Chrome 스크롤바 숨김 */
+    .card-track-container:active { cursor: grabbing; }
+    
+    .card-track {
+      display: flex;
+      gap: 20px;
+      padding: 20px 10px;
+      width: max-content; 
+    }
+
+    /* 개별 유저 프로필 카드 */
+    .u-card {
+      flex: 0 0 380px; width: 380px; 
+      background: #141c2f; border: 1px solid #1e293b; border-radius: 16px;
+      overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      display: flex; flex-direction: column;
+    }
+
+    /* 상단 스플래시 배경 & 기본 정보 */
+    .uc-head {
+      position: relative; height: 180px; background-size: cover; background-position: center 15%;
+    }
+    .uc-head::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(to bottom, rgba(11,18,32,0.1) 0%, rgba(20,28,47,1) 100%);
+    }
+    .uc-rank-badge {
+      position: absolute; top: 14px; left: 14px; z-index: 2;
+      background: rgba(15,23,42,0.85); border: 1px solid; padding: 4px 10px;
+      border-radius: 6px; font-size: 13px; font-weight: 700;
+      backdrop-filter: blur(4px);
+    }
+    
+    /* 티어 색상 */
+    .t-challenger { color: #f59e0b; border-color: #b45309; }
+    .t-grandmaster { color: #ef4444; border-color: #991b1b; }
+    .t-master { color: #c084fc; border-color: #7e22ce; }
+    .t-diamond { color: #60a5fa; border-color: #1d4ed8; }
+    .t-emerald { color: #34d399; border-color: #047857; }
+    .t-platinum { color: #38bdf8; border-color: #0369a1; }
+    .t-gold { color: #facc15; border-color: #a16207; }
+    .t-silver { color: #cbd5e1; border-color: #475569; }
+    .t-bronze { color: #b45309; border-color: #78350f; }
+    .t-iron { color: #78716c; border-color: #44403c; }
+
+    .uc-name-box { position: absolute; bottom: 12px; left: 16px; z-index: 2; }
+    .uc-name { font-size: 24px; font-weight: 900; color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+
+    /* 중단 통계 요약 */
+    .uc-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 16px; }
+    .uc-stats-row { display: flex; gap: 10px; }
+    .uc-stat-box {
+      flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 10px;
+      padding: 12px 0; text-align: center; display: flex; flex-direction: column; gap: 4px;
+    }
+    .uc-stat-title { font-size: 11px; color: #94a3b8; font-weight: 600; }
+    .uc-stat-val { font-size: 18px; font-weight: 800; color: #f8fafc; }
+    .uc-stat-sub { font-size: 11px; color: #64748b; }
+
+    /* 📊 육각형 레이더 차트 & 세부 지표 */
+    .uc-mid-grid { display: flex; gap: 12px; align-items: center; background: #0f172a; padding: 12px; border-radius: 12px; border: 1px solid #1e293b; }
+    .uc-radar-wrap { width: 140px; height: 140px; position: relative; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .uc-metrics { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+    .uc-metric-item { display: flex; justify-content: space-between; align-items: center; font-size: 13px; border-bottom: 1px solid #1e293b; padding-bottom: 4px; }
+    .uc-metric-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .uc-metric-label { color: #94a3b8; font-weight: 600; display:flex; align-items:center; gap:4px; }
+    .uc-metric-val { font-weight: 800; color: #e2e8f0; }
+
+    /* 챔피언 리스트 */
+    .uc-section-title { font-size: 13px; font-weight: 800; color: #94a3b8; margin-bottom: 8px; padding-left: 4px; border-left: 3px solid #3b82f6; line-height:1; }
+    .uc-champ-list { display: flex; flex-direction: column; gap: 6px; }
+    .uc-champ-row {
+      display: flex; align-items: center; gap: 10px; background: #1e293b; border-radius: 8px; padding: 6px 10px;
+    }
+    .uc-champ-icon { width: 34px; height: 34px; border-radius: 50%; border: 1px solid #334155; object-fit: cover; }
+    .uc-champ-info { flex: 1; display: flex; flex-direction: column; line-height: 1.2; }
+    .uc-champ-name { font-size: 13px; font-weight: 800; color: #e2e8f0; }
+    .uc-champ-games { font-size: 11px; color: #94a3b8; margin-top:2px; }
+    .uc-champ-winrate { font-weight: 800; font-size: 13px; text-align: right; min-width: 45px; }
+    .uc-champ-kda { font-size: 11px; color: #94a3b8; text-align: right; min-width: 75px; line-height:1.2; }
+    .uc-champ-kda b { color: #e2e8f0; font-size: 12px; }
+    .c-high { color: #3b82f6; } .c-mid { color: #10b981; } .c-low { color: #ef4444; }
+
+    /* 선호 아이템 (컴팩트 32px 그리드 & 2개 라인 구분) */
+    .uc-item-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #1e293b;
+      padding: 12px 14px;
+      border-radius: 8px;
+    }
+    .uc-item-row-label {
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 700;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .uc-item-list {
+      display: grid;
+      grid-template-columns: repeat(7, 32px); /* 아이콘 크기 축소 */
+      justify-content: space-between;         /* 아이템 사이 여백 확보 */
+      gap: 6px;
+    }
+    .uc-item-slot {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      background: rgba(11, 18, 32, 0.6);
+      border: 1px solid #334155;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .uc-item-icon {
+      width: 100%;
+      height: 100%;
+      border-radius: 5px;
+      object-fit: cover;
+    }
+    .uc-item-badge {
+      position: absolute;
+      bottom: -3px;
+      right: -3px;
+      background: #dc2626;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 3px;
+      border-radius: 4px;
+      line-height: 1;
+      border: 1px solid #7f1d1d;
+      z-index: 2;
+    }
+
+
+
+    /* 최근 전적 */
+    .uc-recent-row { display: flex; gap: 4px; flex-wrap: wrap; }
+    .uc-badge {
+      width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 800; border-radius: 4px; color: #fff;
+    }
+    .uc-badge.W { background: #2563eb; }
+    .uc-badge.L { background: #dc2626; }
+    
+    .empty-card { text-align:center; padding: 40px 20px; color:#64748b; font-size:14px; width: 100%; }
+  </style>
+</head>
+<body>
+
+  <h1>내전 유저 프로필 리포트</h1>
+  <div class="sub-hint">💡 점수는 DB 공식 실력점수와 연동되며, 인게임 세부 지표는 JSON 기록이 있는 경기만 집계됩니다.</div>
+
+  <div id="nav-placeholder"></div>
+  <script>
+    fetch("nav.html").then(r => r.text()).then(h => document.getElementById("nav-placeholder").innerHTML = h);
+  </script>
+
+  <!-- 가로 스크롤 영역 -->
+  <div class="card-track-container" id="trackContainer">
+    <div class="card-track" id="cardTrack">
+      <div style="color:#64748b; margin:40px auto; width:100%; text-align:center;">데이터를 불러오고 분석하는 중입니다... 🐛</div>
+    </div>
+  </div>
+
+<script>
+  const API_BASE = 'https://wispy-recipe-b8f5.3alzak.workers.dev/api';
+  let currentPatch = "14.24.1";
+  let champKeyToName = {};
+  let rawItemData = {}; // 💡 아이템 가격 및 코어 여부 메타데이터 저장소
+
+  // 1. DDragon 초기화 (챔피언 + 아이템 동시 로드)
+  async function initDDragon() {
+    try {
+      const vRes = await fetch("https://ddragon.leagueoflegends.com/api/versions.json");
+      const versions = await vRes.json();
+      currentPatch = versions[0];
+
+      const [cRes, iRes] = await Promise.all([
+        fetch(`https://ddragon.leagueoflegends.com/cdn/${currentPatch}/data/ko_KR/champion.json`),
+        fetch(`https://ddragon.leagueoflegends.com/cdn/${currentPatch}/data/ko_KR/item.json`)
+      ]);
+
+      const cData = await cRes.json();
+      const iData = await iRes.json();
+
+      Object.values(cData.data).forEach(c => { champKeyToName[String(c.key)] = c.id; });
+      rawItemData = iData.data || {};
+    } catch(e) {
+      console.warn("DDragon 초기화 실패", e);
+    }
+  }
+
+  // 💡 아이템 가치(코어/완제품) 티어 산정 헬퍼
+  function getItemPriority(itemId) {
+    const item = rawItemData[String(itemId)];
+    if (!item) return { tier: 0, cost: 0 };
+
+    const cost = item.gold?.total || 0;
+    const tags = item.tags || [];
+    const isConsumable = tags.includes('Consumable') || tags.includes('Trinket') || cost <= 150;
+    const isBootsTier2 = tags.includes('Boots') && cost >= 900;
+    const isFinishedCore = cost >= 2200 || (!item.into && cost >= 2000);
+
+    // Tier 3: 코어 완제품 아이템 (2,200G 이상 또는 상위트리가 없는 2,000G 이상 완성템)
+    if (isFinishedCore) return { tier: 3, cost };
+    // Tier 2: 2티어 신발 및 상위 조합 재료템 (900G ~ 2,100G)
+    if (isBootsTier2 || cost >= 1000) return { tier: 2, cost };
+    // Tier 1: 기본 하위 재료템 / 도란 시리즈 (150G ~ 999G)
+    if (!isConsumable && cost > 150) return { tier: 1, cost };
+    // Tier 0: 물약, 와드, 장신구 등 단순 소모품
+    return { tier: 0, cost };
+  }
+
+  // 2. 실력점수 순위에 따른 티어 산정
+  function getTierData(rankIndex) {
+    if (rankIndex === 0) return { name: '챌린저', cls: 't-challenger' };
+    if (rankIndex === 1) return { name: '그랜드마스터', cls: 't-grandmaster' };
+    if (rankIndex <= 3) return { name: '마스터', cls: 't-master' };
+    if (rankIndex <= 6) return { name: '다이아몬드', cls: 't-diamond' };
+    if (rankIndex <= 11) return { name: '에메랄드', cls: 't-emerald' };
+    if (rankIndex <= 17) return { name: '플래티넘', cls: 't-platinum' };
+    if (rankIndex <= 24) return { name: '골드', cls: 't-gold' };
+    if (rankIndex <= 32) return { name: '실버', cls: 't-silver' };
+    if (rankIndex <= 41) return { name: '브론즈', cls: 't-bronze' };
+    return { name: '아이언', cls: 't-iron' };
+  }
+
+  // 3. 🛡️ 무한 복제에도 깨지지 않는 순수 SVG 육각형 레이더 생성 헬퍼
+  function generateRadarSVG(scores) {
+    // scores: [공격, 생존, 파밍, 시야, 승률, 캐리] (각 0~100)
+    const labels = ['공격', '생존', '파밍', '시야', '승률', '캐리'];
+    const cx = 70, cy = 70, r = 46;
+    const angles = [-90, -30, 30, 90, 150, 210].map(a => (a * Math.PI) / 180);
+
+    // 배경 거미줄 다각형 (33%, 66%, 100%)
+    const makeWeb = (ratio) => {
+      return angles.map(a => `${cx + r * ratio * Math.cos(a)},${cy + r * ratio * Math.sin(a)}`).join(' ');
+    };
+
+    // 유저 데이터 다각형 포인트
+    const userPoints = angles.map((a, i) => {
+      const valRatio = Math.max(0.15, Math.min(1.0, (scores[i] || 0) / 100));
+      return `${cx + r * valRatio * Math.cos(a)},${cy + r * valRatio * Math.sin(a)}`;
+    }).join(' ');
+
+    // 축 선분
+    const axisLines = angles.map(a => {
+      const x2 = cx + r * Math.cos(a);
+      const y2 = cy + r * Math.sin(a);
+      return `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="#334155" stroke-width="1"/>`;
+    }).join('');
+
+    // 라벨 텍스트 좌표
+    const labelOffsets = [
+      { x: cx, y: cy - r - 6, anchor: 'middle' }, // 공격
+      { x: cx + r + 12, y: cy - r/2 + 2, anchor: 'start' }, // 생존
+      { x: cx + r + 12, y: cy + r/2 + 4, anchor: 'start' }, // 파밍
+      { x: cx, y: cy + r + 12, anchor: 'middle' }, // 시야
+      { x: cx - r - 12, y: cy + r/2 + 4, anchor: 'end' }, // 승률
+      { x: cx - r - 12, y: cy - r/2 + 2, anchor: 'end' }  // 캐리
+    ];
+
+    const labelTexts = labels.map((l, i) => {
+      const pos = labelOffsets[i];
+      return `<text x="${pos.x}" y="${pos.y}" fill="#94a3b8" font-size="9" font-weight="700" text-anchor="${pos.anchor}">${l}</text>`;
+    }).join('');
+
+    return `
+      <svg viewBox="0 0 140 140" width="140" height="140" style="overflow:visible;">
+        <polygon points="${makeWeb(1.0)}" fill="none" stroke="#334155" stroke-width="1.2"/>
+        <polygon points="${makeWeb(0.66)}" fill="none" stroke="#1e293b" stroke-width="1"/>
+        <polygon points="${makeWeb(0.33)}" fill="none" stroke="#1e293b" stroke-width="1"/>
+        ${axisLines}
+        <polygon points="${userPoints}" fill="rgba(34, 197, 94, 0.35)" stroke="#22c55e" stroke-width="2"/>
+        ${labelTexts}
+      </svg>
+    `;
+  }
+
+
+
+  // 4. 드래그 스크롤 & 자동 무한 롤링 제어 (소수점 누적 연산 적용)
+  const container = document.getElementById('trackContainer');
+  const track = document.getElementById('cardTrack');
+  let isDown = false;
+  let startX = 0;
+  let startScrollLeft = 0;
+  let scrollPos = 0; // 💡 소수점 누적을 위한 내부 실수형 변수
+
+  // 🖱️ 마우스 클릭 드래그 이벤트 (누르고 있을 때만 좌우 이동)
+  container.addEventListener('mousedown', (e) => {
+    isDown = true;
+    startX = e.pageX - container.offsetLeft;
+    startScrollLeft = container.scrollLeft;
+    scrollPos = container.scrollLeft; // 드래그 시작 시점 위치 동기화
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDown = false;
+    scrollPos = container.scrollLeft; // 드래그 종료 후 현재 위치 동기화
+  });
+
+  container.addEventListener('mouseleave', () => {
+    isDown = false;
+    scrollPos = container.scrollLeft;
+  });
+
+  container.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - container.offsetLeft;
+    const walk = (x - startX) * 1.5; // 드래그 감도
+    container.scrollLeft = startScrollLeft - walk;
+    scrollPos = container.scrollLeft;
+  });
+
+  // 🔄 부드러운 자동 롤링 (마우스 오버 중에도 계속 이동, 드래그 중에만 일시정지)
+  function autoScroll() {
+    if (!isDown) {
+      scrollPos += 0.35; // 💡 내부 변수에 소수점을 정상 누적
+
+      const halfWidth = track.scrollWidth / 2;
+      if (halfWidth > 0 && scrollPos >= halfWidth) {
+        scrollPos -= halfWidth; // 절반 지점 도달 시 자연스럽게 루프
+      }
+      container.scrollLeft = scrollPos;
+    }
+    requestAnimationFrame(autoScroll);
+  }
+
+
+  // 5. 메인 데이터 로드 및 분석
+  async function loadAndProcess() {
+    await initDDragon();
+
+    // 💡 players.html과 100% 동일한 점수를 가져오기 위해 season=2026-2 파라미터 적용
+    const [uRes, rRes] = await Promise.all([
+      fetch(`${API_BASE}/users?season=2026-2&show_all=true`),
+      fetch(`${API_BASE}/results?limit=500&season=all`)
+    ]);
+    const users = await uRes.json();
+    const rawResults = await rRes.json();
+
+    // JSON 있는 유효 경기만 필터링 (최신순)
+    const validGames = (Array.isArray(rawResults) ? rawResults : []).filter(r => {
+      if (!r.match_detail) return false;
+      try {
+        const d = typeof r.match_detail === 'string' ? JSON.parse(r.match_detail) : r.match_detail;
+        return d && Array.isArray(d.players);
+      } catch(e) { return false; }
+    }).sort((a, b) => b.id - a.id);
+
+    // 활성 유저만 추출 및 실력점수 기준 내림차순 정렬 (티어 배정)
+    const activeUsers = (Array.isArray(users) ? users : [])
+      .filter(u => u.active === 1 || u.active === undefined)
+      .sort((a, b) => Number(b.rating) - Number(a.rating));
+
+    // 유저별 스탯 딕셔너리 초기화 (DB의 u.rating 그대로 사용)
+    const statsMap = {};
+    activeUsers.forEach((u, index) => {
+      statsMap[u.id] = {
+        id: u.id,
+        name: u.user_id,
+        rating: Number(u.rating ?? 0), // DB 실제 실력점수
+        tierInfo: getTierData(index),
+        games: 0, wins: 0, losses: 0,
+        kills: 0, deaths: 0, assists: 0, 
+        damage: 0, damage_taken: 0, cs: 0, vision: 0, durationMin: 0,
+        history: [], // W, L
+        champs: {},  // { champName: { games, wins, k, d, a } }
+        items: {}    // { itemId: count }
+      };
+    });
+
+    // 전적 집계 (오직 match_detail이 존재하는 경기만 인게임 지표에 반영)
+    validGames.forEach(g => {
+      const d = typeof g.match_detail === 'string' ? JSON.parse(g.match_detail) : g.match_detail;
+      const gameMin = (d.duration_sec || 0) / 60;
+      if (gameMin <= 0) return;
+
+      d.players.forEach(p => {
+        if (!p.db_id || !statsMap[p.db_id]) return;
+        const s = statsMap[p.db_id];
+        const isWin = (p.team === d.winner);
+
+        s.games++;
+        if (isWin) { s.wins++; s.history.push('W'); } 
+        else { s.losses++; s.history.push('L'); }
+        
+        s.kills += (p.kills || 0); 
+        s.deaths += (p.deaths || 0); 
+        s.assists += (p.assists || 0);
+        s.damage += (p.total_damage || 0); 
+        s.damage_taken += (p.damage_taken || 0);
+        s.cs += (p.cs || 0); 
+        s.vision += (p.vision_score || 0);
+        s.durationMin += gameMin;
+
+        // 챔피언 집계
+        const cId = champKeyToName[String(p.champion_id)] || 'Aatrox';
+        if (!s.champs[cId]) s.champs[cId] = { games: 0, wins: 0, k: 0, d: 0, a: 0 };
+        s.champs[cId].games++;
+        if (isWin) s.champs[cId].wins++;
+        s.champs[cId].k += (p.kills || 0); 
+        s.champs[cId].d += (p.deaths || 0); 
+        s.champs[cId].a += (p.assists || 0);
+
+        // 아이템 집계
+        const rawItems = p.items || [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6];
+        if (Array.isArray(rawItems)) {
+          rawItems.forEach(itemId => {
+            const idNum = Number(itemId);
+            if (idNum > 0) s.items[idNum] = (s.items[idNum] || 0) + 1;
+          });
+        }
+      });
+    });
+
+    // 1게임 이상 플레이한 유저만 점수순으로 출력
+    const finalUsers = Object.values(statsMap).filter(s => s.games > 0).sort((a,b) => b.rating - a.rating);
+    renderCards(finalUsers);
+  }
+
+  // 6. 카드 렌더링
+  // 6. 카드 렌더링
+  // 6. 카드 렌더링
+  function renderCards(userStatsArr) {
+    track.innerHTML = '';
+    if (userStatsArr.length === 0) {
+      track.innerHTML = `<div class="empty-card">유효한 상세 JSON 경기 기록이 없습니다.</div>`;
+      return;
+    }
+
+    userStatsArr.forEach(s => {
+      const winRate = Math.round((s.wins / s.games) * 100);
+      const recent20 = s.history.slice(0, 20);
+      const recWins = recent20.filter(x => x === 'W').length;
+      const recWinRate = recent20.length > 0 ? Math.round((recWins / recent20.length) * 100) : 0;
+      
+      const kdaVal = s.deaths === 0 ? 'Perfect' : ((s.kills + s.assists) / s.deaths).toFixed(2);
+      const avgK = (s.kills / s.games).toFixed(1);
+      const avgD = (s.deaths / s.games).toFixed(1);
+      const avgA = (s.assists / s.games).toFixed(1);
+      
+      const dpm = Math.round(s.damage / s.durationMin);
+      const csm = (s.cs / s.durationMin).toFixed(1);
+      const avgVision = Math.round(s.vision / s.games);
+
+      // 💡 [1] 모스트 챔피언 상위 5위까지 추출
+      const champArr = Object.entries(s.champs)
+        .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.games - a.games || b.wins - a.wins)
+        .slice(0, 5);
+      
+      // 스플래시 배경 (모스트 1위 챔피언 기준)
+      const splashChamp = champArr.length > 0 ? champArr[0].name : 'Teemo';
+      const splashUrl = `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${splashChamp}_0.jpg`;
+
+      // 챔피언 HTML (5위까지 렌더링)
+      const champsHtml = champArr.map(c => {
+        const cw = Math.round((c.wins / c.games) * 100);
+        const cwClass = cw >= 60 ? 'c-high' : cw >= 45 ? 'c-mid' : 'c-low';
+        const ckdaRatio = c.d === 0 ? 'Perf' : ((c.k + c.a) / c.d).toFixed(2);
+        const cAvgK = (c.k / c.games).toFixed(1);
+        const cAvgD = (c.d / c.games).toFixed(1);
+        const cAvgA = (c.a / c.games).toFixed(1);
+
+        return `
+          <div class="uc-champ-row">
+            <img class="uc-champ-icon" src="https://ddragon.leagueoflegends.com/cdn/${currentPatch}/img/champion/${c.name}.png" onerror="this.style.opacity='0.2'">
+            <div class="uc-champ-info">
+              <span class="uc-champ-name">${c.name}</span>
+              <span class="uc-champ-games">${c.games}게임 · 승률 <span class="${cwClass}">${cw}%</span></span>
+            </div>
+            <div class="uc-champ-kda">
+              <b>${ckdaRatio}:1</b><br>
+              <span>${cAvgK}/${cAvgD}/${cAvgA}</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // 💡 [2] 1줄: 코어 완제품 우선 (티어 > 구매 횟수 > 골드 가격) - 상위 7개
+      const coreItems = Object.entries(s.items)
+        .map(([id, count]) => {
+          const { tier, cost } = getItemPriority(id);
+          return { id, count, tier, cost };
+        })
+        .sort((a, b) => {
+          if (b.tier !== a.tier) return b.tier - a.tier;
+          if (b.count !== a.count) return b.count - a.count;
+          return b.cost - a.cost;
+        })
+        .slice(0, 7);
+
+      // 💡 [3] 2줄: 최다 구매 횟수 순 (순수 카운트 > 가격) - 상위 7개
+      const frequentItems = Object.entries(s.items)
+        .map(([id, count]) => {
+          const { cost } = getItemPriority(id);
+          return { id, count, cost };
+        })
+        .sort((a, b) => {
+          if (b.count !== a.count) return b.count - a.count;
+          return b.cost - a.cost;
+        })
+        .slice(0, 7);
+
+      const renderSlotList = (items) => {
+        if (!items || items.length === 0) {
+          return '<div style="color:#64748b; font-size:11px; grid-column:span 7; text-align:center; padding:4px 0;">데이터 없음</div>';
+        }
+        return items.map(item => `
+          <div class="uc-item-slot">
+            <img class="uc-item-icon" src="https://ddragon.leagueoflegends.com/cdn/${currentPatch}/img/item/${item.id}.png" onerror="this.style.display='none'">
+            <span class="uc-item-badge">${item.count}</span>
+          </div>
+        `).join('');
+      };
+
+      const row1Html = renderSlotList(coreItems);
+      const row2Html = renderSlotList(frequentItems);
+
+      // 최근 전적 뱃지
+      const badgesHtml = s.history.slice(0, 10).map(x => `<div class="uc-badge ${x}">${x}</div>`).join('');
+
+      // 육각형 데이터 점수 계산
+      const kdaRatioNum = s.deaths === 0 ? 10 : ((s.kills + s.assists) / s.deaths);
+      const radarScores = [
+        Math.min(100, (dpm / 1100) * 100),
+        Math.max(0, 100 - (Number(avgD) * 12)),
+        Math.min(100, (s.cs / s.durationMin / 8.5) * 100),
+        Math.min(100, (avgVision / 38) * 100),
+        winRate,
+        Math.min(100, (kdaRatioNum / 5.5) * 100)
+      ];
+
+      const card = document.createElement('div');
+      card.className = 'u-card';
+      card.innerHTML = `
+        <div class="uc-head" style="background-image: url('${splashUrl}');">
+          <div class="uc-rank-badge ${s.tierInfo.cls}">${s.tierInfo.name} · ${s.rating}점</div>
+          <div class="uc-name-box"><div class="uc-name">${s.name}</div></div>
+        </div>
+        
+        <div class="uc-body">
+          <div class="uc-stats-row">
+            <div class="uc-stat-box">
+              <span class="uc-stat-title">내전 승률</span>
+              <span class="uc-stat-val">${winRate}%</span>
+              <span class="uc-stat-sub">${s.wins}승 ${s.losses}패</span>
+            </div>
+            <div class="uc-stat-box">
+              <span class="uc-stat-title">최근 20전</span>
+              <span class="uc-stat-val">${recWinRate}%</span>
+              <span class="uc-stat-sub">${recWins}승 ${recent20.length - recWins}패</span>
+            </div>
+            <div class="uc-stat-box">
+              <span class="uc-stat-title">평균 평점</span>
+              <span class="uc-stat-val" style="color:#38bdf8">${kdaVal}</span>
+              <span class="uc-stat-sub">${avgK}/${avgD}/${avgA}</span>
+            </div>
+          </div>
+
+          <div class="uc-mid-grid">
+            <div class="uc-radar-wrap">
+              ${generateRadarSVG(radarScores)}
+            </div>
+            <div class="uc-metrics">
+              <div class="uc-metric-item"><span class="uc-metric-label">⚔️ KDA</span> <span class="uc-metric-val">${kdaVal}</span></div>
+              <div class="uc-metric-item"><span class="uc-metric-label">🎯 분당 CS</span> <span class="uc-metric-val">${csm}</span></div>
+              <div class="uc-metric-item"><span class="uc-metric-label">🔥 DPM</span> <span class="uc-metric-val">${dpm}</span></div>
+              <div class="uc-metric-item"><span class="uc-metric-label">👁️ 평균 시야</span> <span class="uc-metric-val">${avgVision}</span></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="uc-section-title">숙련도 챔피언 (TOP 5)</div>
+            <div class="uc-champ-list">${champsHtml || '<div style="color:#64748b; font-size:12px;">데이터 없음</div>'}</div>
+          </div>
+
+          <div>
+            <div class="uc-section-title">선호 아이템</div>
+            <div class="uc-item-container">
+              <div>
+                <div class="uc-item-row-label">👑 코어 완제품 순</div>
+                <div class="uc-item-list">${row1Html}</div>
+              </div>
+              <div>
+                <div class="uc-item-row-label">🔥 최다 구매 순</div>
+                <div class="uc-item-list">${row2Html}</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="uc-section-title">최근 내전 기록 (좌측이 최신)</div>
+            <div class="uc-recent-row">${badgesHtml}</div>
+          </div>
+        </div>
+      `;
+      track.appendChild(card);
+    });
+
+    // 💡 무한 롤링 복제 및 애니메이션 재개
+    track.innerHTML += track.innerHTML;
+    scrollPos = 0;
+    container.scrollLeft = 0;
+    requestAnimationFrame(autoScroll);
+  }
+
+  loadAndProcess();
+</script>
+</body>
+</html>

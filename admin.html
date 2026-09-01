@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>젤리 주인장 페이지</title>
+      <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐛</text></svg>">
+
+  <style>
+    /* 다크 모드 스타일 변수 */
+    :root{ --bg:#0f172a; --card:#1e293b; --text:#f1f5f9; --sub:#94a3b8; --border:#334155; --blue:#3b82f6; }
+    
+    body { font-family: Arial, sans-serif; background:var(--bg); color:var(--text); margin:0; padding:20px; }
+    h1 { color:var(--blue); margin:0 0 20px; text-align:center; }
+    
+    /* 카드 스타일 */
+    .card {
+      background:var(--card); border:1px solid var(--border); border-radius:12px;
+      padding:24px; max-width:600px; margin:0 auto;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    .card h2 { margin-top:0; border-bottom:1px solid var(--border); padding-bottom:12px; font-size:18px; }
+
+    /* 입력 폼 스타일 */
+    .form-group { margin-bottom:16px; }
+    .form-group label { display:block; font-size:13px; color:var(--sub); margin-bottom:6px; font-weight:bold; }
+    
+    input, textarea, select {
+      width:100%; box-sizing:border-box;
+      padding:10px 12px; border-radius:6px;
+      border:1px solid var(--border);
+      background:#020617; color:white;
+      font-size:14px;
+    }
+    input:focus, textarea:focus, select:focus { outline:2px solid var(--blue); border-color:transparent; }
+    
+    textarea { resize:vertical; min-height:80px; }
+
+    /* 버튼 스타일 */
+    .btn {
+      width:100%; background:var(--blue); color:white; font-weight:bold;
+      padding:12px; border:none; border-radius:8px; cursor:pointer;
+      font-size:16px; margin-top:10px; transition: background .2s;
+    }
+    .btn:hover { background:#2563eb; }
+    
+    .hint { font-size:12px; color:#64748b; margin-top:4px; }
+  </style>
+</head>
+<body>
+
+  <h1>젤리 주인장 페이지 👑</h1>
+
+  <div class="card">
+    <h2>🎬 [명예/치욕]의 전당 업로드</h2>
+    
+    <div class="form-group">
+      <label>제목</label>
+      <input type="text" id="v_title" placeholder="예: 탑의 영혼">
+    </div>
+
+    <div class="form-group">
+      <label>내용 (설명)</label>
+      <textarea id="v_desc" placeholder="영상에 대한 간단한 설명..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label>파일명 (videos 폴더 내 파일명)</label>
+      <input type="text" id="v_filename" placeholder="예: highlight05.mp4">
+      <div class="hint">※ 확장자(.mp4, .webm)까지 정확히 입력하세요.</div>
+    </div>
+
+    <div class="form-group">
+      <label>게시자 (올린 사람)</label>
+      <select id="v_uploader">
+        <option value="">유저 목록 로딩 중...</option>
+      </select>
+    </div>
+
+    <button class="btn" onclick="uploadVideo()">업로드 (DB 저장)</button>
+  </div>
+
+  <script>
+    const API_BASE = 'https://wispy-recipe-b8f5.3alzak.workers.dev/api';
+
+    // 1. 유저 목록 불러오기 (드롭다운 채우기)
+    async function loadUsers() {
+      const sel = document.getElementById('v_uploader');
+      try {
+        const res = await fetch(`${API_BASE}/users?show_all=true`); // 모든 유저 가져오기
+        const users = await res.json();
+        
+        sel.innerHTML = ''; // 초기화
+        
+        // 내림차순 or 이름순 정렬 등 원하는대로 (여기선 그냥 둠)
+        users.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.id;
+          opt.textContent = `${u.user_id}`;
+          sel.appendChild(opt);
+        });
+        
+        // (선택) 기본값으로 본인(관리자)을 선택해두고 싶으면 여기서 처리
+        // sel.value = '1'; 
+
+      } catch (e) {
+        sel.innerHTML = '<option value="">목록 불러오기 실패</option>';
+        alert('유저 목록 로드 실패');
+      }
+    }
+
+    // 2. 업로드 버튼 클릭 시
+    async function uploadVideo() {
+      const title = document.getElementById('v_title').value.trim();
+      const desc = document.getElementById('v_desc').value.trim();
+      const filename = document.getElementById('v_filename').value.trim();
+      const uploader_id = document.getElementById('v_uploader').value;
+
+      if (!title || !filename || !uploader_id) {
+        alert('제목, 파일명, 게시자는 필수 입력 항목입니다.');
+        return;
+      }
+
+      const btn = document.querySelector('.btn');
+      const originalText = btn.textContent;
+      btn.textContent = '저장 중...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(`${API_BASE}/videos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: title,
+            description: desc,
+            filename: filename,
+            uploader_id: Number(uploader_id)
+          })
+        });
+
+        if (res.ok) {
+          alert('✅ DB에 영상 정보가 저장되었습니다!');
+          // 입력창 초기화
+          document.getElementById('v_title').value = '';
+          document.getElementById('v_desc').value = '';
+          document.getElementById('v_filename').value = '';
+        } else {
+          const err = await res.json();
+          alert('저장 실패: ' + (err.error || res.status));
+        }
+
+      } catch (e) {
+        alert('서버 오류: ' + e.message);
+      } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+      }
+    }
+
+    // 페이지 로드 시 실행
+    loadUsers();
+  </script>
+
+</body>
+</html>

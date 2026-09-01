@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>젤리🐛의 내전 도우미 ·포지션별 팀 분배</title>
+      <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐛</text></svg>">
+
+</head>
+<body>
+
+<h1>포지션별 팀 분배</h1>
+
+<div id="nav-placeholder"></div>
+<script>
+fetch("nav.html")
+  .then(res => res.text())
+  .then(html => document.getElementById("nav-placeholder").innerHTML = html);
+</script>
+
+<div class="card" id="mixCard">
+  <h3>참가자 & 포지션 기준 팀 나누기</h3>
+  <div class="sub">
+    💡 왼쪽 목록에서 오른쪽으로 <b>드래그</b> 또는 <b>클릭</b>으로 참가자를 추가하세요. <b>더블클릭</b>하면 제거됩니다.<br>
+    💡 팀 구성 시 <b>주 포지션 &gt; 부 포지션 &gt; 임의</b> 우선순위로 역할을 배정하며, 동률이면 <b>실력점수 균형</b>을 더 맞춥니다.
+  </div>
+
+  <div class="row">
+    <div class="col">
+      <h4 style="text-align:center;">전체 유저 (실력/포지션)</h4>
+      <div id="allUsers" class="panel" aria-label="전체 유저 드롭 영역(제거용)">
+        <ul id="allList" class="list"></ul>
+        <div class="sub">💡 참가자를 이 카드로 드롭해도 제거됩니다.</div>
+      </div>
+    </div>
+
+    <div class="col">
+      <h4 style="text-align:center;">참가자 (드래그/클릭, <span id="selCount">0</span>/10)</h4>
+      <div id="dropZone" class="drop" aria-label="참가자 드롭 영역">
+        <ul id="selList" class="list"></ul>
+      </div>
+      <div style="margin-top:8px; display:flex; gap:8px; justify-content:center;">
+        <button id="clearSel" class="btn btn-ghost">참가자 비우기</button>
+          <button id="prevMembers" class="btn btn-ghost">이전 멤버</button>
+        <button id="mixBtn" class="btn" disabled>팀 섞기 (포지션 우선)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card" id="resultCard">
+  <h3>팀 구성 & 결과</h3>
+  <div id="result" style="min-height:80px;"></div>
+  <div class="sub">💡 젤리 LoL 전용 업로더를 통해 인게임 전적을 DB에 기록하세요.</div>
+</div>
+
+<audio id="sfxRoll"   src="sfx/slot_roll_loop.mp3" preload="auto" loop></audio>
+<audio id="sfxDecel"  src="sfx/slot_decel.mp3" preload="auto"></audio>
+<audio id="sfxTick"   src="sfx/slot_tick.mp3" preload="auto"></audio>
+<audio id="sfxFanfare"src="sfx/Deslizando_o_dedo_no_piano.ogg.mp3" preload="auto"></audio>
+
+<script>
+  // ✅ 전체 유저 캐시
+  let allUsersData = [];
+  let userById = new Map();
+
+  // 미니 대시보드 하이라이트
+  const API_BASE = 'https://wispy-recipe-b8f5.3alzak.workers.dev/api';
+
+  const ROLE_KEYS = ['T','J','M','A','S']; // Top/Jungle/Mid/ADC/Support
+  const ROLE_KO   = { T:'🛡️ 탑', J:'🌳 정글', M:'🧙🏻‍♂️ 미드', A:'🏹 원딜', S:'🛠️ 서폿' };
+
+  // ===== 유틸: 포지션 라벨
+  function posLabel(code) {
+    const c = (code||'').toUpperCase();
+    if (!ROLE_KO[c]) return '올라운더';
+    return ROLE_KO[c];
+  }
+
+  // ===== 목록 영역
+  const allUsers = document.getElementById('allUsers');
+  const allList  = document.getElementById('allList');
+
+  const dropZone  = document.getElementById('dropZone');
+  const selList   = document.getElementById('selList');
+  const selCount  = document.getElementById('selCount');
+  const clearSel  = document.getElementById('clearSel');
+  const mixBtn    = document.getElementById('mixBtn');
+  const resultBox = document.getElementById('result');
+
+  let draggingSelId = null;
+
+  function updateSelState() {
+    selCount.textContent = selList.children.length;
+    mixBtn.disabled = selList.children.length !== 10;
+  }
+
+  function makeDraggableItem(u) {
+    const main = posLabel(u.position_main);
+    const sub  = posLabel(u.position_sub);
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span>${u.user_id} <span style="color:#64748b;">(${u.rating})</span></span>
+        <span style="font-size:12px;color:#475569;">${main}${sub!=='올라운더' ? ' · '+sub : ''}</span>
+      </div>
+    `;
+    li.draggable = true;
+    li.dataset.id = u.id;
+    li.dataset.name = u.user_id;
+    li.dataset.rating = u.rating;
+    li.dataset.m = (u.position_main||'').toUpperCase();
+    li.dataset.s = (u.position_sub||'').toUpperCase();
+
+    // 클릭으로 참가자 즉시 추가
+    li.addEventListener('click', () => {
+      addParticipant({
+        id: u.id, name: u.user_id, rating: u.rating,
+        m: li.dataset.m, s: li.dataset.s
+      });
+    });
+
+    li.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', JSON.stringify({
+        id:u.id, name:u.user_id, rating:u.rating, m:li.dataset.m, s:li.dataset.s, from:'all'
+      }));
+    });
+    return li;
+  }
+
+  async function loadUsers() {
+    allList.innerHTML = '<li>불러오는 중...</li>';
+    try {
+      const res = await fetch(`${API_BASE}/users`);
+      const users = await res.json();
+      allUsersData = Array.isArray(users) ? users : [];
+      userById = new Map(allUsersData.map(u => [Number(u.id), u]));
+      allList.innerHTML = '';
+      if (!Array.isArray(allUsersData) || allUsersData.length === 0) {
+        allList.innerHTML = '<li>등록된 유저가 없습니다</li>'; return;
+      }
+      allUsersData.forEach(u => allList.appendChild(makeDraggableItem(u)));
+    } catch (err) {
+      console.error('loadUsers 실패:', err);
+      allList.innerHTML = '<li>유저 목록을 불러오지 못했습니다</li>';
+    }
+  }
+
+  // ✅ 최근 경기(1건) 불러오기
+  async function loadLastMembers() {
+    try {
+      const res = await fetch(`${API_BASE}/results?limit=1`, { cache: 'no-store' });
+      const arr = await res.json();
+      if (!Array.isArray(arr) || arr.length === 0) {
+        alert('최근 경기 기록이 없습니다.'); return;
+      }
+      const r = arr[0];
+      const blue = [
+        { id: r.blue1, name: r.blue1_name }, { id: r.blue2, name: r.blue2_name },
+        { id: r.blue3, name: r.blue3_name }, { id: r.blue4, name: r.blue4_name },
+        { id: r.blue5, name: r.blue5_name },
+      ];
+      const red = [
+        { id: r.red1,  name: r.red1_name  }, { id: r.red2,  name: r.red2_name  },
+        { id: r.red3,  name: r.red3_name  }, { id: r.red4,  name: r.red4_name  },
+        { id: r.red5,  name: r.red5_name  },
+      ];
+      const ten = [...blue, ...red];
+      const byName = new Map(allUsersData.map(u => [String(u.user_id), u]));
+      const byId   = new Map(allUsersData.map(u => [Number(u.id), u]));
+
+      selList.innerHTML = '';
+      for (const p of ten) {
+        const rawName = p?.name ?? '';
+        const normName = String(rawName || '').trim();
+        const rawId = Number(p?.id);
+        let user = null;
+        if (normName && byName.has(normName)) user = byName.get(normName);
+        else if (Number.isFinite(rawId) && byId.has(rawId)) user = byId.get(rawId);
+
+        const id     = user ? Number(user.id)      : (Number.isFinite(rawId) ? rawId : undefined);
+        const name   = user ? String(user.user_id) : (normName || (Number.isFinite(rawId) ? `#${rawId}` : '미확인'));
+        const rating = user ? Number(user.rating)  : 0;
+        const m = (user?.position_main || '').toUpperCase();
+        const s = (user?.position_sub  || '').toUpperCase();
+        addParticipant({ id, name, rating, m, s });
+      }
+      updateSelState();
+    } catch (e) {
+      console.error('loadLastMembers 실패:', e);
+      alert('이전 멤버 불러오기 실패');
+    }
+  }
+
+  // 참가자 한 명 추가
+  function addParticipant({ id, name, rating, m, s }) {
+    if ([...selList.children].some(li => li.dataset.id === String(id))) return;
+    if (selList.children.length >= 10) return;
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span>${name} <span style="color:#64748b;">(${rating})</span></span>
+        <span style="font-size:12px;color:#475569;">${posLabel(m)}${posLabel(s)!=='올라운더' ? ' · '+posLabel(s) : ''}</span>
+      </div>
+    `;
+    li.draggable = true;
+    li.dataset.id = id;
+    li.dataset.name = name;
+    li.dataset.rating = rating;
+    li.dataset.m = (m||'').toUpperCase();
+    li.dataset.s = (s||'').toUpperCase();
+    li.title = '더블클릭: 참가자에서 제거';
+
+    li.addEventListener('dragstart', (ev) => {
+      draggingSelId = String(id);
+      ev.dataTransfer.setData('text/plain', JSON.stringify({
+        id, name, rating, m:li.dataset.m, s:li.dataset.s, from:'sel'
+      }));
+    });
+    li.addEventListener('dragend', () => { draggingSelId = null; });
+    li.addEventListener('dblclick', () => { li.remove(); updateSelState(); });
+    selList.appendChild(li);
+    updateSelState();
+  }
+
+  // 드롭 영역 이벤트
+  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background='#eef5ff'; });
+  dropZone.addEventListener('dragleave', () => { dropZone.style.background=''; });
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault(); dropZone.style.background='';
+    try {
+      const d = JSON.parse(e.dataTransfer.getData('text/plain'));
+      addParticipant({ id:d.id, name:d.name, rating:d.rating, m:d.m, s:d.s });
+    } catch {}
+  });
+
+  allUsers.addEventListener('dragover', (e) => e.preventDefault());
+  allUsers.addEventListener('drop', (e) => {
+    e.preventDefault();
+    try {
+      const d = JSON.parse(e.dataTransfer.getData('text/plain'));
+      if (d.from === 'sel') {
+        const target = [...selList.children].find(li => li.dataset.id === String(d.id));
+        if (target) { target.remove(); updateSelState(); }
+      }
+    } catch {}
+  });
+  document.addEventListener('drop', (e) => {
+    if (draggingSelId && !dropZone.contains(e.target)) {
+      const target = [...selList.children].find(li => li.dataset.id === draggingSelId);
+      if (target) { target.remove(); updateSelState(); }
+    }
+  });
+  clearSel.addEventListener('click', () => { selList.innerHTML = ''; updateSelState(); });
+
+  function getSelectedPlayers() {
+    return [...selList.children].map(li => ({
+      id: Number(li.dataset.id),
+      name: li.dataset.name,
+      rating: Number(li.dataset.rating),
+      m: (li.dataset.m||'').toUpperCase(),
+      s: (li.dataset.s||'').toUpperCase()
+    }));
+  }
+
+  // ===== 헝가리안 알고리즘 로직 =====
+  function roleCost(p, role) {
+    if (p.m === role) return 0;
+    if (p.s === role) return 1;
+    return 2;
+  }
+  function hungarian(cost) {
+    const n = cost.length;
+    const u = Array(n+1).fill(0);
+    const v = Array(n+1).fill(0);
+    const p = Array(n+1).fill(0);
+    const way = Array(n+1).fill(0);
+    for (let i=1; i<=n; i++) {
+      p[0] = i;
+      let j0 = 0;
+      const minv = Array(n+1).fill(Infinity);
+      const used = Array(n+1).fill(false);
+      do {
+        used[j0] = true;
+        const i0 = p[j0];
+        let delta = Infinity, j1 = 0;
+        for (let j=1; j<=n; j++) if (!used[j]) {
+          const cur = cost[i0-1][j-1] - u[i0] - v[j];
+          if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+          if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+        }
+        for (let j=0; j<=n; j++) {
+          if (used[j]) { u[p[j]] += delta; v[j] -= delta; }
+          else { minv[j] -= delta; }
+        }
+        j0 = j1;
+      } while (p[j0] !== 0);
+      do {
+        const j1 = way[j0];
+        p[j0] = p[j1];
+        j0 = j1;
+      } while (j0);
+    }
+    const assign = Array(n).fill(-1);
+    for (let j=1; j<=n; j++) if (p[j]) assign[p[j]-1] = j-1;
+    let costSum = 0;
+    for (let i=0;i<n;i++) costSum += cost[i][assign[i]];
+    return { assign, costSum };
+  }
+
+  function bestSplitByPosition(players) {
+    const n = players.length;
+    const pick = 5;
+    let best = null;
+
+    function evaluateTeam(team) {
+      const C = team.map(p => ROLE_KEYS.map(r => roleCost(p, r)));
+      const { assign, costSum } = hungarian(C);
+      const roleMap = {}; 
+      for (let i=0;i<5;i++) roleMap[ROLE_KEYS[assign[i]]] = team[i];
+      return { roleMap, cost: costSum, assign };
+    }
+
+    function dfs(start, chosenIdx) {
+      if (chosenIdx.length === pick) {
+        const blue = chosenIdx.map(i => players[i]);
+        const set = new Set(chosenIdx);
+        const red  = players.filter((_,i) => !set.has(i));
+
+        const blueEval = evaluateTeam(blue);
+        const redEval  = evaluateTeam(red);
+        const posCost = blueEval.cost + redEval.cost;
+        const blueSum = blue.reduce((a,b)=>a+b.rating,0);
+        const redSum  = red.reduce((a,b)=>a+b.rating,0);
+        const diff = Math.abs(blueSum - redSum);
+
+        if (!best || posCost < best.posCost || (posCost === best.posCost && diff < best.diff)) {
+          best = {
+            posCost, diff,
+            blue: { list: blue, roles: blueEval.roleMap, sum: blueSum },
+            red : { list: red , roles: redEval.roleMap , sum: redSum  }
+          };
+        }
+        return;
+      }
+      for (let i=start; i<=n-(pick-chosenIdx.length); i++) {
+        chosenIdx.push(i); dfs(i+1, chosenIdx); chosenIdx.pop();
+      }
+    }
+    dfs(0, []);
+    return best;
+  }
+
+  // ===== 애니메이션 & 렌더링 로직 (match_maker 스타일) =====
+
+  // 1. 오디오 헬퍼
+  function playOnce(id, {volume=1, rate=1} = {}) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.pause(); el.currentTime = 0;
+    el.volume = volume; el.playbackRate = rate;
+    el.play().catch(()=>{});
+  }
+  function loopPlay(id, {volume=0.5, rate=1} = {}) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.volume = volume; el.playbackRate = rate;
+    el.loop = true;
+    el.play().catch(()=>{});
+  }
+  function loopStop(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.pause(); el.currentTime = 0; el.loop = false;
+  }
+  function randomFromPool(pool) {
+    if (!pool || pool.length === 0) return '...';
+    return pool[(Math.random() * pool.length) | 0];
+  }
+
+  // 2. 슬롯 보드 HTML 생성
+  function buildSlotBoard({ blueOrdered, redOrdered }) {
+    // 굴릴 때 보여줄 더미 이름 풀
+    const pool = [...blueOrdered.map(x=>x.name), ...redOrdered.map(x=>x.name)];
+    
+    // 왼쪽: BLUE, 오른쪽: RED
+    // 각 칸(row)은 ROLE_KEYS 순서 (Top, Jgl, Mid, Adc, Sup)
+    return `
+      <div class="slot-board">
+        <div class="slot-col" id="slotBlueCol">
+          <h4>BLUE</h4>
+          <div class="slot-sums">
+            <span class="sum-pill sum-blue">합: <b id="sumBlue">0</b></span>
+            <span class="sum-pill sum-diff">차이: <b id="sumDiff">0</b></span>
+          </div>
+          ${ROLE_KEYS.map((r, i) => `
+            <div class="slot spin" data-idx="${i}">
+              <div class="slot-role-icon">${ROLE_KO[r]}</div>
+              <div class="slot-name">···</div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div class="slot-col" id="slotRedCol">
+          <h4>RED</h4>
+          <div class="slot-sums" style="justify-content:flex-end">
+            <span class="sum-pill sum-red">합: <b id="sumRed">0</b></span>
+          </div>
+          ${ROLE_KEYS.map((r, i) => `
+            <div class="slot red spin" data-idx="${i}">
+              <div class="slot-role-icon">${ROLE_KO[r]}</div>
+              <div class="slot-name">···</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // 3. 슬롯머신 공개 시퀀스
+  async function startSlotReveal(best, players) {
+    // Hungarian 결과를 정해진 순서(T,J,M,A,S) 배열로 변환
+    const blueOrdered = ROLE_KEYS.map(r => best.blue.roles[r]); // 각 요소는 player 객체
+    const redOrdered  = ROLE_KEYS.map(r => best.red.roles[r]);
+
+    // DB 제출용 글로벌 변수 저장 (ID 목록)
+    const blueIds = blueOrdered.map(p => p.id);
+    const redIds  = redOrdered.map(p => p.id);
+    window.currentTeams = { blueIds, redIds };
+
+    // 랜덤 풀
+    const pool = [...blueOrdered.map(p=>p.name), ...redOrdered.map(p=>p.name)];
+
+    // DOM 삽입
+    // DOM 삽입
+    resultBox.innerHTML = '';
+    renderRecordBar(best); // 💡 best 인자 전달
+    const boardHTML = buildSlotBoard({ blueOrdered, redOrdered });
+    const boardDiv = document.createElement('div');
+    boardDiv.innerHTML = boardHTML;
+    resultBox.prepend(boardDiv);
+
+    // 합계 변수
+    const elSumB = document.getElementById('sumBlue');
+    const elSumR = document.getElementById('sumRed');
+    const elDiff = document.getElementById('sumDiff');
+    let sumB = 0, sumR = 0;
+    const updateDiff = () => elDiff.textContent = Math.abs(sumB - sumR);
+
+    // 사운드 시작
+    loopPlay('sfxRoll', { volume: 0.45, rate: 1 });
+
+    // 단일 슬롯 애니메이션 함수
+    const spinOne = (el, finalObj, { baseSpin=1100, which='blue' }={}) => new Promise((resolve)=>{
+      el.classList.add('spin');
+      const label = el.querySelector('.slot-name');
+      const int = setInterval(()=>{ label.textContent = randomFromPool(pool); }, 60);
+
+      setTimeout(()=>{
+        playOnce('sfxDecel', { volume: 0.6 });
+        setTimeout(()=>{
+          clearInterval(int);
+          // 최종 노출: "이름 (점수)"
+          label.textContent = `${finalObj.name} (${finalObj.rating})`;
+          el.classList.remove('spin');
+          el.classList.add('final','highlight');
+          if (which === 'red') el.classList.add('red');
+
+          // 합계 누적
+          if (which === 'blue') { sumB += finalObj.rating; elSumB.textContent = sumB; }
+          else                  { sumR += finalObj.rating; elSumR.textContent = sumR; }
+          updateDiff();
+
+          playOnce('sfxTick');
+          setTimeout(()=> el.classList.remove('highlight'), 550);
+          resolve();
+        }, 500);
+      }, baseSpin);
+    });
+
+    const blueCol = document.getElementById('slotBlueCol');
+    const redCol  = document.getElementById('slotRedCol');
+
+    // 탑(0) -> 정글(1) -> ... 순서로 좌우 동시/순차 공개
+    for (let i = 0; i < 5; i++) {
+      const bSlot = blueCol.querySelector(`.slot[data-idx="${i}"]`);
+      const rSlot = redCol.querySelector(`.slot[data-idx="${i}"]`);
+      
+      // 약간의 시차를 두고 돌림
+      await spinOne(bSlot, blueOrdered[i], { baseSpin: 900 + i*220, which: 'blue' });
+      await spinOne(rSlot, redOrdered[i],  { baseSpin: 900 + i*220, which: 'red' });
+    }
+
+    // 종료
+    loopStop('sfxRoll');
+    playOnce('sfxFanfare', { volume: 0.8 });
+
+    // 애니메이션 후 최종 상세 테이블 렌더링
+    renderFinalTable(best);
+  }
+
+
+
+  // 5. 최종 상세 테이블 (기존 스타일 + match_maker 스타일 혼합)
+  function renderFinalTable(best) {
+    // 역할 기준 테이블 생성
+    const rows = ROLE_KEYS.map(r => {
+      const b = best.blue.roles[r];
+      const rd = best.red.roles[r];
+      return `<tr>
+        <td class="role">${ROLE_KO[r]}</td>
+        <td class="blue">${b.name} (${b.rating})</td>
+        <td class="red">${rd.name} (${rd.rating})</td>
+      </tr>`;
+    }).join('');
+
+    const tableHTML = `
+      <div class="result-wrap" style="margin-top:20px; animation: fadeIn 1s;">
+        <table class="result-table">
+          <thead>
+            <tr>
+              <th>포지션</th>
+              <th class="blue-head">BLUE (합 ${best.blue.sum})</th>
+              <th class="red-head">RED (합 ${best.red.sum})</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr><th colspan="3">포지션 페널티 합: ${best.posCost} · 점수 차이: ${best.diff}</th></tr>
+          </tfoot>
+        </table>
+      </div>
+    `;
+    resultBox.insertAdjacentHTML('beforeend', tableHTML);
+  }
+
+  // ===== 팀 섞기 버튼 클릭 =====
+  document.getElementById('mixBtn').addEventListener('click', () => {
+    const players = getSelectedPlayers();
+    if (players.length !== 10) return;
+
+    // 1. 계산
+    const best = bestSplitByPosition(players);
+    if (!best) { alert('팀을 만들 수 없습니다.'); return; }
+
+    // 2. 화면 이동
+    const resultCard = document.getElementById('resultCard');
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    // 3. 슬롯머신 시작
+    startSlotReveal(best, players);
+  });
+
+
+  // ✅ [이전 멤버] 클릭 시
+  document.getElementById('prevMembers').addEventListener('click', loadLastMembers);
+
+
+  // 4. 상단 버튼 바: 디스코드 전송 단일 버튼 적용
+  function renderRecordBar(best){
+    const bar = document.createElement('div');
+    bar.className = 'record-bar';
+    bar.innerHTML = `
+      <button class="btn-ghost" id="btnSendDiscord" style="background:#5865F2; color:#fff; border-color:#5865F2;">📢 디스코드로 팀 전송</button>
+      <div class="spacer"></div>
+      <small style="opacity:.75">슬롯 공개에서 합계와 차이를 확인하세요</small>
+    `;
+    resultBox.appendChild(bar);
+
+    document.getElementById('btnSendDiscord').onclick = () => sendPositionTeamToDiscord(best);
+  }
+
+  // 📢 디스코드 채널로 포지션별 5:5 팀 분배 결과 전송
+  async function sendPositionTeamToDiscord(best) {
+    if (!best || !best.blue || !best.red) {
+      alert('먼저 팀을 섞어주세요.');
+      return;
+    }
+
+    const btn = document.getElementById('btnSendDiscord');
+    if (btn) { btn.disabled = true; btn.textContent = '전송 중...'; }
+
+    const posMap = { 'T': '탑', 'J': '정글', 'M': '미드', 'A': '원딜', 'S': '서폿' };
+    const roleName = { 'T': '🛡️ 탑', 'J': '🌳 정글', 'M': '🧙🏻‍♂️ 미드', 'A': '🏹 원딜', 'S': '🛠️ 서폿' };
+
+    const formatPlayer = (p, assignedRole) => {
+      const m = posMap[p.m] || '올라운더';
+      let s = '올라운더';
+      if (p.s === 'NONE') {
+        s = '부 포지션 없음';
+      } else if (p.s && posMap[p.s]) {
+        s = posMap[p.s];
+      }
+      
+      const roleStr = roleName[assignedRole] || assignedRole;
+      return {
+        name: p.name,
+        rating: p.rating,
+        pos: `[${roleStr}] (희망: ${m}/${s})`
+      };
+    };
+
+    const blueList = ROLE_KEYS.map(r => formatPlayer(best.blue.roles[r], r));
+    const redList  = ROLE_KEYS.map(r => formatPlayer(best.red.roles[r], r));
+
+    const payload = {
+      type: 'team',
+      modeTitle: '포지션별 팀 분배',
+      sumBlue: best.blue.sum,
+      sumRed: best.red.sum,
+      diff: best.diff,
+      blue: blueList,
+      red: redList
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/discord/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        alert('🎉 디스코드 채널로 포지션 팀 명단 카드를 전송했습니다!');
+      } else {
+        alert(`전송 실패: ${data.error || res.status}`);
+      }
+    } catch (e) {
+      alert(`네트워크 오류: ${e.message}`);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '📢 디스코드로 팀 전송'; }
+    }
+  }
+
+  // 초기화
+  document.addEventListener('DOMContentLoaded', () => {
+    loadUsers();
+    updateSelState();
+  });
+</script>
+
+<style>
+  /* ===== j-lol mini nav ===== */
+  .jl-mini-nav{
+    max-width: 1100px; margin: 8px auto 18px;
+    display:flex; flex-wrap:wrap; gap:10px; justify-content:center;
+  }
+  .jl-mini-card{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 12px; border-radius:12px;
+    background:#0f172a; color:#e5e7eb; text-decoration:none;
+    border:1px solid #1f2937; box-shadow:0 2px 10px rgba(0,0,0,.18);
+    font-size:14px; line-height:1; transition:.12s transform,.12s border-color,.12s box-shadow;
+  }
+  .jl-mini-card:hover{ transform:translateY(-1px); border-color:#334155; }
+  .jl-mini-card.is-active{
+    border-color:#60a5fa; box-shadow:0 0 0 2px rgba(96,165,250,.25) inset, 0 2px 10px rgba(0,0,0,.2);
+  }
+  .jl-mini-ico{ font-size:16px; opacity:.95 }
+  .jl-mini-badge{ font-size:11px; padding:2px 6px; border-radius:999px; margin-left:4px; background:#1f2937; color:#cbd5e1; }
+  @media (prefers-color-scheme: light){
+    .jl-mini-card{ background:#ffffff; color:#0f172a; border-color:#e5e7eb; }
+    .jl-mini-card.is-active{ border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.2) inset; }
+    .jl-mini-badge{ background:#eef2ff; color:#1e40af; }
+  }
+
+  /* 페이지 스타일 */
+  body { font-family: Arial, sans-serif; background:#f4f4f9; color:#333; margin:0; padding:20px; text-align:center; }
+  h1 { color:#0056b3; margin:0 0 8px; }
+  .sub { color:#666; font-size:12px; margin:6px 0 14px; }
+
+  .card { background:#fff; box-shadow:0 2px 5px rgba(0,0,0,.1); border-radius:8px; padding:18px; max-width:1000px; margin:18px auto; text-align:left; }
+  .card h3 { margin:0 0 12px; color:#0056b3; text-align:center; }
+  .row { display:flex; gap:16px; align-items:flex-start; justify-content:center; flex-wrap:wrap; }
+  .col { flex:1 1 420px; max-width:480px; }
+
+  .panel { min-height:320px; border:1px solid #ddd; padding:8px; border-radius:6px; background:#fff; }
+  .drop  { min-height:320px; border:2px dashed #bbb; padding:8px; border-radius:6px; background:#fff; transition: background .15s ease; }
+  ul.list { list-style:none; margin:0; padding:0; }
+  ul.list li { padding:6px 8px; border-bottom:1px solid #eee; user-select:none; cursor:grab; }
+
+  .btn { background:#007bff; color:#fff; border:none; padding:10px 16px; border-radius:5px; cursor:pointer; font-size:16px; }
+  .btn:hover { background:#0056b3; }
+  .btn-ghost { background:#fff; color:#007bff; border:1px solid #007bff; } .btn-ghost:hover{ background:#eef5ff; }
+
+  /* ===== 슬롯머신 스타일 (match_maker 스타일 이식) ===== */
+  .slot-board{
+    display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:12px 0 10px;
+  }
+  .slot-col{
+    background:#0f172a; color:#e5e7eb; border:1px solid #1f2937; border-radius:12px; padding:10px 12px;
+  }
+  .slot-col h4{ margin:0 0 8px; font-size:15px; color:#cbd5e1; text-align:center; }
+  .slot{
+    height:46px; display:flex; align-items:center; justify-content:flex-start; /* 좌측 정렬 */
+    background:#0b1220; border:1px solid #243244; border-radius:10px;
+    margin:8px 0; position:relative; overflow:hidden; padding:0 12px;
+  }
+  /* 포지션 아이콘 */
+  .slot-role-icon { width:60px; font-size:14px; color:#94a3b8; font-weight:bold; border-right:1px solid #334155; margin-right:10px; }
+  .slot-name{
+    font-weight:800; font-size:16px; letter-spacing:.2px;
+    color:#e2e8f0; white-space:nowrap; flex:1; text-align:center;
+  }
+  .slot.spin .slot-name{ opacity:.8 }
+  .slot.final{ border-color:#3b82f6 }
+  .slot.final.red{ border-color:#ef4444 }
+  .slot.highlight::after{
+    content:""; position:absolute; inset:0; border-radius:10px;
+    box-shadow:0 0 0 2px rgba(99,102,241,.45) inset; animation: pulseGlow .6s ease 2;
+  }
+  @keyframes pulseGlow{
+    0%{ box-shadow:0 0 0 0 rgba(99,102,241,.0) inset }
+    50%{ box-shadow:0 0 0 3px rgba(99,102,241,.5) inset }
+    100%{ box-shadow:0 0 0 0 rgba(99,102,241,.0) inset }
+  }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+
+  .slot-sums {
+    display:flex; justify-content:space-between; align-items:center;
+    gap:10px; margin:4px 0 10px;
+  }
+  .sum-pill { padding:6px 10px; border-radius:999px; font-weight:700; font-size:13px }
+  .sum-blue { background:#0b3b7a; color:#dbeafe; }
+  .sum-red  { background:#6a0b0b; color:#fee2e2; }
+  .sum-diff { background:#334155; color:#e2e8f0; }
+
+  .record-bar{
+    margin:12px 0 2px; padding:10px 12px; border-radius:12px;
+    background:#0b1220; border:1px solid #243244; display:flex; gap:8px; align-items:center;
+  }
+  .record-bar .spacer { flex:1 }
+  .btn-ghost.blue { border-color:#2563eb; color:#dbeafe; background:#0f172a; }
+  .btn-ghost.red  { border-color:#ef4444; color:#fee2e2; background:#0f172a; }
+
+  /* 결과 테이블 */
+  .result-wrap { margin-top: 6px; }
+  .result-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 18px;
+    border: 2px solid #d0d7de;
+  }
+  .result-table th,
+  .result-table td {
+    border: 1px solid #e2e8f0;
+    padding: 12px 14px;
+    text-align: center;
+    vertical-align: middle;
+    background:#fff;
+    font-weight: 600;
+  }
+  .result-table thead th { font-size: 20px; background: #f1f5f9; }
+  .result-table .blue-head { color:#1d4ed8; font-weight: 800; }
+  .result-table .red-head  { color:#dc2626; font-weight: 800; }
+  .result-table .role { width: 92px; font-weight:800; background:#f8fafc; }
+  .result-table .blue { color:#2563eb; }
+  .result-table .red  { color:#dc2626; }
+  .result-table tfoot th { background:#f8fafc; font-weight:700; }
+
+  /* 유저 아이템 */
+  .user-item { display: flex; justify-content: space-between; align-items: center; padding: 3px 8px; border-bottom: 1px solid #eee; font-size: 15px; }
+  .user-left { flex: 1; text-align: left; }
+  .user-right { min-width: 150px; text-align: right; color: #444; white-space: nowrap; }
+</style>
+</body>
+</html>

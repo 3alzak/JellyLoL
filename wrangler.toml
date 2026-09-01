@@ -1,0 +1,13 @@
+name = "wispy-recipe-b8f5"
+main = "src/worker.js"
+compatibility_date = "2026-01-01"
+
+# 🗄️ D1 Database 바인딩
+[[d1_databases]]
+binding = "DB"
+database_name = "jelly-db"          # Cloudflare D1에 생성된 DB 이름
+database_id = "YOUR_D1_DATABASE_ID" # Cloudflare 대시보드 D1에서 확인한 ID 입력
+
+# 🤖 Workers AI 바인딩
+[ai]
+binding = "AI"

@@ -1,0 +1,47 @@
+<!-- nav.html -->
+<nav class="jl-mini-nav">
+  <a class="jl-mini-card" href="index.html"><span class="jl-mini-ico">🏠</span>메인</a>
+  <a class="jl-mini-card" href="match_maker.html"><span class="jl-mini-ico">⚖️</span>실력별</a>
+  <a class="jl-mini-card" href="match_position.html"><span class="jl-mini-ico">🎯</span>포지션별</a>
+  <a class="jl-mini-card" href="fearless.html"><span class="jl-mini-ico">🧩</span>피어리스</a>
+  <a class="jl-mini-card" href="auction.html"><span class="jl-mini-ico">💰</span>경매</a>
+  <a class="jl-mini-card" href="memorable.html"><span class="jl-mini-ico">🎬</span>명장면</a>
+  <a class="jl-mini-card" href="result_upload.html"><span class="jl-mini-ico">📝</span>기록</a>
+  <a class="jl-mini-card" href="game_results.html"><span class="jl-mini-ico">📊</span>경기</a>
+  <a class="jl-mini-card" href="players.html"><span class="jl-mini-ico">👥</span>유저</a>
+  <a class="jl-mini-card" href="player_graph.html"><span class="jl-mini-ico">🪪</span>프로필</a>
+  <a class="jl-mini-card" href="coin_toss.html"><span class="jl-mini-ico">🌓</span>코인</a>
+</nav>
+
+<!-- 🚀 에러를 즉각 유발하여 chat_widget.js를 동적으로 주입하는 트리거 -->
+<img src="x" style="display:none;" onerror="if(!window._jellyChatLoaded){window._jellyChatLoaded=true;var s=document.createElement('script');s.src='chat_widget.js';document.body.appendChild(s);}" />
+
+
+
+
+<style>
+  /* ===== j-lol mini nav (prefix: jl-) ===== */
+  .jl-mini-nav{
+    max-width: 1100px; margin: 8px auto 18px;
+    display:flex; flex-wrap:wrap; gap:10px; justify-content:center;
+  }
+  .jl-mini-card{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 12px; border-radius:12px;
+    background:#0f172a; color:#e5e7eb; text-decoration:none;
+    border:1px solid #1f2937; box-shadow:0 2px 10px rgba(0,0,0,.18);
+    font-size:14px; line-height:1; transition:.12s transform,.12s border-color,.12s box-shadow;
+  }
+  .jl-mini-card:hover{ transform:translateY(-1px); border-color:#334155; }
+  .jl-mini-card.is-active{
+    border-color:#60a5fa; box-shadow:0 0 0 2px rgba(96,165,250,.25) inset, 0 2px 10px rgba(0,0,0,.2);
+  }
+  .jl-mini-ico{ font-size:16px; opacity:.95 }
+  .jl-mini-badge{ font-size:11px; padding:2px 6px; border-radius:999px; margin-left:4px; background:#1f2937; color:#cbd5e1; }
+  /* 밝은 배경 페이지 호환 (선택) */
+  @media (prefers-color-scheme: light){
+    .jl-mini-card{ background:#ffffff; color:#0f172a; border-color:#e5e7eb; }
+    .jl-mini-card.is-active{ border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.2) inset; }
+    .jl-mini-badge{ background:#eef2ff; color:#1e40af; }
+  }
+</style>

@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>젤리🐛의 내전 도우미 ·유저 목록</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐛</text></svg>">
+
+</head>
+<body>
+  <h1 id="page-title">유저 목록 (BEAST Gaming 2026 시즌)</h1>
+
+<div style="text-align:center; margin-bottom: 20px; display: flex; justify-content: center; align-items: center; gap: 15px;">
+  <!-- 시즌 선택 드롭다운 -->
+  <select id="select-season" onchange="changeSeason()" style="padding: 10px 14px; border-radius: 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 14px; background: white; cursor: pointer; color: #0f172a;">
+    <option value="2026-2" selected>🔥 2026 시즌 2 (현재)</option>
+    <option value="2026-1">📜 2026 시즌 1</option>
+    <option value="2025">📜 2025 시즌</option>
+  </select>
+
+  <div style="display: flex; align-items: center; gap: 8px; background: #e2e8f0; padding: 6px 12px; border-radius: 8px;">
+    <span style="font-size: 14px; font-weight: bold; color: #334155;">비활성화 유저 보기</span>
+    <label class="switch">
+      <input type="checkbox" id="toggle-inactive" onchange="toggleInactiveUsers()">
+      <span class="slider"></span>
+    </label>
+  </div>
+</div>
+
+<div class="hint">...</div>
+  <div class="hint">각 헤더의 ↑↓ 버튼으로 정렬할 수 있습니다. <b>비활성화</b>된 유저는 모든 페이지에서 숨겨집니다.</div>
+
+<!-- ===== mini nav ===== -->
+<div id="nav-placeholder"></div>
+<script>
+fetch("nav.html")
+  .then(res => res.text())
+  .then(html => document.getElementById("nav-placeholder").innerHTML = html);
+</script>
+
+  <table>
+    <thead>
+  <tr>
+    <th>
+      idx
+      <button class="sort-button" onclick="sortUsers('id', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('id', false)">↓</button>
+    </th>
+    <th>
+      유저 이름
+      <button class="sort-button" onclick="sortUsers('user_id', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('user_id', false)">↓</button>
+    </th>
+    <th>
+      점수
+      <button class="sort-button" onclick="sortUsers('rating', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('rating', false)">↓</button>
+    </th>
+    <th>
+      승리
+      <button class="sort-button" onclick="sortUsers('win', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('win', false)">↓</button>
+    </th>
+    <th>
+      패배
+      <button class="sort-button" onclick="sortUsers('loose', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('loose', false)">↓</button>
+    </th>
+    <th>
+      승률(%)
+      <button class="sort-button" onclick="sortUsers('winRate', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('winRate', false)">↓</button>
+    </th>
+
+    <!-- ✅ 새 컬럼 3개 -->
+    <th>
+      초기점수
+      <button class="sort-button" onclick="sortUsers('rating_start', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('rating_start', false)">↓</button>
+    </th>
+    <th>
+      주 포지션
+      <button class="sort-button" onclick="sortUsers('posMainLabel', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('posMainLabel', false)">↓</button>
+    </th>
+    <th>
+      부 포지션
+      <button class="sort-button" onclick="sortUsers('posSubLabel', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('posSubLabel', false)">↓</button>
+    </th>
+
+    <th>
+      가입일
+      <button class="sort-button" onclick="sortUsers('created_at', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('created_at', false)">↓</button>
+    </th>
+    <th>
+      마지막 갱신
+      <button class="sort-button" onclick="sortUsers('last_updated', true)">↑</button>
+      <button class="sort-button" onclick="sortUsers('last_updated', false)">↓</button>
+    </th>
+    <th>활성화</th>
+    <th>삭제</th>
+  </tr>
+</thead>
+
+<tbody id="user-tbody">
+  <tr><td colspan="12" style="text-align:center;"></td></tr>
+</tbody>
+
+  </table>
+</body>
+
+
+  <script>
+
+// ✅ UTC → 한국시간(KST) 변환
+function toKST(utcText) {
+  if (!utcText) return '-';
+  const d = new Date(utcText + 'Z'); // UTC로 파싱
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: true
+  }).format(d);
+}
+
+    // ✅ 포지션 이모지
+// ✅ 포지션 이모지
+const POS_EMOJI = { '':'🤖', T:'🛡️', J:'🌳', M:'🧙🏻‍♂️', A:'🏹', S:'🛠️', NONE:'🚫' };
+
+const posIcon = c => {
+  const code = (c || '').toUpperCase();
+  return `${POS_EMOJI[code] || '🤖'} ${posLabel(code)}`;
+};
+
+  // 현재 페이지 자동 하이라이트
+  (function(){
+    const current = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    document.querySelectorAll('.jl-mini-nav .jl-mini-card').forEach(a=>{
+      const href = (a.getAttribute('href')||'').toLowerCase();
+      if (href && current.endsWith(href)) a.classList.add('is-active');
+    });
+  })();
+
+  const API_BASE = 'https://wispy-recipe-b8f5.3alzak.workers.dev/api';
+
+  // ✅ 초기 점수 → 티어라벨 맵(예: 14 → "골드2(14)")
+  const RANK_LABELS = {
+    0:'🔘아이언4(0)',  1:'🔘아이언3(1)',  2:'🔘아이언2(2)',  3:'🔘아이언1(3)',
+    4:'🥉브론즈4(4)',  5:'🥉브론즈3(5)',  6:'🥉브론즈2(6)',  7:'🥉브론즈1(7)',
+    8:'🥈실버4(8)',   9:'🥈실버3(9)',  10:'🥈실버2(10)', 11:'🥈실버1(11)',
+    12:'🥇골드4(12)', 13:'🥇골드3(13)', 14:'🥇골드2(14)', 15:'🥇골드1(15)',
+    16:'❄️플래4(16)', 17:'❄️플래3(17)', 18:'❄️플래2(18)', 19:'❄️플래1(19)',
+    20:'🐲에메4(20)', 21:'🐲에메3(21)', 22:'🐲에메2(22)', 23:'🐲에메1(23)',
+    24:'💎다이아4(24)',25:'💎다이아3(25)',26:'💎다이아2(26)',27:'💎다이아1(27)',
+    30:'👑마스터(30)', 40:'👑그랜드마스터(40)', 50:'👑챌린저(50)'
+  };
+  const rankLabel = n => (n in RANK_LABELS) ? RANK_LABELS[n] : `${n}`;
+
+// ✅ 포지션 코드 → 한글 라벨 (NONE: 없음 추가)
+const POS_LABELS = { 
+  '':'올라운더', T:'탑', J:'정글', M:'미드', A:'원딜', S:'서폿', NONE:'없음' 
+};
+// 포지션 전체 출력용 헬퍼 함수
+function getFullPosView(mainCode, subCode) {
+  const m = (mainCode || '').toUpperCase();
+  const s = (subCode || '').toUpperCase();
+  const mainIcon = POS_EMOJI[m] || '🤖';
+  const mainName = POS_LABELS[m] || '올라운더';
+
+  if (!m) return '🤖 올라운더';
+  if (s === 'ONLY') return `${mainIcon} ${mainName}~만 가능`;
+  if (s === 'EXC')  return `${mainIcon} ${mainName} 빼고 다 감`;
+  
+  const subIcon = POS_EMOJI[s] ? `${POS_EMOJI[s]} ${POS_LABELS[s]}` : '';
+  return subIcon ? `${mainIcon} ${mainName} | ${subIcon}` : `${mainIcon} ${mainName}`;
+}
+
+  const posLabel = c => POS_LABELS[(c||'').toUpperCase()] ?? '올라운더';
+
+let users = []; // 정렬 시 이 배열을 정렬
+  // [수정] 전역 변수로 현재 시즌 설정
+let currentSeason = '2026-2'; // 기본 시즌: 2026-2
+
+  // ✅ [추가] 비활성화 유저 보기 상태 (기본값: false = 안보기)
+  let showInactive = false;
+
+  // ✅ [추가] 비활성화 유저 보기 토글 시 실행되는 함수
+  function toggleInactiveUsers() {
+    showInactive = document.getElementById('toggle-inactive').checked;
+    displayUsers(users); // 상태 변경 후 목록 다시 그리기
+  }
+// 드롭다운 변경 시 실행
+  function changeSeason() {
+    const sel = document.getElementById('select-season');
+    if (sel) {
+      currentSeason = sel.value;
+      fetchUsers();
+    }
+  }
+
+  async function fetchUsers() {
+    // ★ 핵심 변경: /users/all 대신 /users?season=... 사용
+    // worker가 이 파라미터를 보고 승/패/점수를 2026년 기준으로 재계산해서 줍니다.
+const res = await fetch(`${API_BASE}/users?season=${currentSeason}&show_all=true`);
+    
+    let raw = await res.json();
+    if (!Array.isArray(raw)) raw = [];
+
+    // (기존 로직 그대로) 미리 계산 필드 추가
+    users = raw.map(u => {
+      // Worker가 이미 2026년 승/패/점수를 계산해서 보냈으므로 그대로 쓰면 됩니다.
+      const win = Number(u.win ?? 0);
+      const loose = Number(u.loose ?? 0);
+      const total = win + loose;
+      const winRate = total > 0 ? +((win/total)*100).toFixed(1) : 0;
+
+      // rating_start는 초기 점수 (DB값 그대로)
+      const rating_start = Number(u.rating_start ?? 0);
+      let ratingStartLabel = rankLabel(rating_start);
+
+      // 2026-2 시즌일 때만 2026-1 전적(X승 Y패) 표기 적용
+      if (currentSeason === '2026-2') {
+        const pw = u.prev_win ?? 0;
+        const pl = u.prev_loose ?? 0;
+        const scoreSign = rating_start > 0 ? `+${rating_start}` : `${rating_start}`;
+        ratingStartLabel = `${pw}승 ${pl}패 (${scoreSign}점)`;
+      }
+
+      const posMainLabelRaw = posLabel(u.position_main);
+      const posSubLabelRaw  = posLabel(u.position_sub);
+      const posMainLabelView = posIcon(u.position_main);
+      const posSubLabelView  = posIcon(u.position_sub);
+
+      return {
+        ...u,
+        win, loose, winRate,
+        rating_start, ratingStartLabel,
+        posMainLabel: posMainLabelRaw,
+        posSubLabel : posSubLabelRaw,
+        posMainLabelView,
+        posSubLabelView
+      };
+    });
+
+    displayUsers(users);
+    updateUI(); // 제목 및 버튼 텍스트 업데이트
+  }
+
+
+  // 🕒 직관적인 날짜 포맷팅 헬퍼 함수 (단일 요일 표기)
+// 🕒 직관적인 날짜 포맷팅 헬퍼 함수 (4주/7일 표기 보정 적용)
+// 🕒 직관적인 날짜 포맷팅 헬퍼 함수 (단일 요일 + 4주/7일 방지 정밀 계산)
+function formatDisplayTime(utcTimeString) {
+  if (!utcTimeString) return '-';
+  
+  // UTC 포맷 보정
+  const rawStr = utcTimeString.includes('Z') || utcTimeString.includes('+') 
+    ? utcTimeString 
+    : utcTimeString.replace(' ', 'T') + 'Z';
+    
+  const date = new Date(rawStr);
+  if (isNaN(date.getTime())) return utcTimeString;
+
+  const now = new Date();
+  const diffSec = Math.max(0, Math.floor((now - date) / 1000));
+
+  // KST 한국시간 변환 (UTC+9)
+  const dateKST = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+  const Y = dateKST.getUTCFullYear();
+  const M = String(dateKST.getUTCMonth() + 1).padStart(2, '0');
+  const D = String(dateKST.getUTCDate()).padStart(2, '0');
+  const H = String(dateKST.getUTCHours()).padStart(2, '0');
+  const m = String(dateKST.getUTCMinutes()).padStart(2, '0');
+  const s = String(dateKST.getUTCSeconds()).padStart(2, '0');
+
+  // 🌈 요일 이모지 & 색상 매핑 (단일 요일)
+  const dayIdx = dateKST.getUTCDay(); // 0(일)~6(토)
+  const weekEmojis = ['✝️', '🌙', '🔥', '💧', '🌲', '🌟', '🌊'];
+  const weekNames  = ['일', '월', '화', '수', '목', '금', '토'];
+
+  const tableColors   = ['#dc2626', '#d97706', '#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#4f46e5'];
+  const tooltipColors = ['#fca5a5', '#fcd34d', '#fca5a5', '#93c5fd', '#86efac', '#fde047', '#a5b4fc'];
+
+  const dayHtmlTable   = `<span style="color:${tableColors[dayIdx]}; font-size:12px;">${weekEmojis[dayIdx]}${weekNames[dayIdx]}</span>`;
+  const dayHtmlTooltip = `<span style="color:${tooltipColors[dayIdx]}">${weekEmojis[dayIdx]}${weekNames[dayIdx]}</span>`;
+
+  // 1) 툴팁용 상세 시간 (밀리초 제외, 초까지만)
+  const fullFormatHtml = `${Y}-${M}-${D} ${H}:${m}:${s} (${dayHtmlTooltip})`;
+
+  // 2) 상대 시간 계산 (4주 / 7일 방지 정밀 계산)
+  let relative = '';
+  if (diffSec < 60) {
+    relative = '방금 전';
+  } else if (diffSec < 3600) {
+    relative = `${Math.floor(diffSec / 60)}분 전`;
+  } else if (diffSec < 86400) {
+    relative = `${Math.floor(diffSec / 3600)}시간 전`;
+  } else {
+    let years = now.getFullYear() - date.getFullYear();
+    let months = now.getMonth() - date.getMonth();
+    let days = now.getDate() - date.getDate();
+
+    if (days < 0) {
+      months -= 1;
+      const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      days += prevMonth.getDate();
+    }
+    if (months < 0) {
+      years -= 1;
+      months += 12;
+    }
+    months += years * 12;
+
+    let weeks = Math.floor(days / 7);
+    let remDays = days % 7;
+
+    // 🛑 [핵심 보정] 4주 이상(28일~)일 경우 3주 + 최대 6일로 캡(Cap) 처리
+    if (weeks >= 4) {
+      weeks = 3;
+      remDays = Math.min(6, days - 21);
+    }
+
+    const parts = [];
+    if (months > 0) parts.push(`${months}달`);
+    if (weeks > 0)  parts.push(`${weeks}주`);
+    if (remDays > 0) parts.push(`${remDays}일`);
+
+    relative = parts.length > 0 ? parts.join(' ') + ' 전' : '방금 전';
+  }
+
+  // 3) HTML 출력
+  return `
+    <div class="custom-tooltip">
+      ${relative} ${dayHtmlTable}
+      <div class="tooltip-box">${fullFormatHtml}</div>
+    </div>
+  `;
+}
+
+
+  // [추가] 시즌 토글 함수
+  function toggleSeason() {
+    if (currentSeason === '2026') {
+      currentSeason = '2025';
+    } else {
+      currentSeason = '2026';
+    }
+    fetchUsers(); // 데이터 다시 로드
+  }
+
+  // [추가] UI 업데이트 (제목 및 버튼)
+  // UI 제목 변경
+  function updateUI() {
+    const title = document.getElementById('page-title');
+    if (!title) return;
+    
+    if (currentSeason === '2026-2') {
+      title.innerText = '유저 목록 (2026 시즌 2) for BEAST Gaming';
+      title.style.color = '#0056b3';
+    } else if (currentSeason === '2026-1') {
+      title.innerText = '유저 목록 (2026 시즌 1) for BEAST Gaming';
+      title.style.color = '#0284c7';
+    } else {
+      title.innerText = '유저 목록 (2025 시즌) for BEAST Gaming';
+      title.style.color = '#b45309';
+    }
+  }
+
+function displayUsers(data) {
+    const tbody = document.getElementById('user-tbody');
+    tbody.innerHTML = '';
+
+    // ✅ [추가] showInactive가 false(안보기)이면 active가 1(활성)인 유저만 남김
+    const filteredData = showInactive ? data : data.filter(u => !!u.active);
+
+    if (filteredData.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;">데이터가 없습니다</td></tr>';
+      return;
+    }
+
+    // ✅ data 대신 필터링된 filteredData를 순회하도록 변경
+    filteredData.forEach(u => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${u.id}</td>
+        <td>${u.user_id}</td>
+        <td>${u.rating}</td>
+        <td>${u.win}</td>
+        <td>${u.loose}</td>
+        <td>${u.winRate}%</td>
+        <td>${u.ratingStartLabel}</td>
+<td>${u.posMainLabelView}</td>
+<td>${u.posSubLabelView}</td>
+<td>${formatDisplayTime(u.created_at)}</td>
+<td>${formatDisplayTime(u.last_updated)}</td>
+        <td>
+  <label class="switch">
+    <input type="checkbox" class="toggle-active" data-id="${u.id}" ${u.active ? 'checked' : ''}>
+    <span class="slider"></span>
+  </label>
+</td>
+        <td><button class="btn-del" data-id="${u.id}">삭제</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+// 🔐 삭제 버튼: PIN 요구 + 헤더 전송
+tbody.querySelectorAll('button.btn-del').forEach(btn => {
+  btn.addEventListener('click', async (e) => {
+    const id = Number(e.currentTarget.getAttribute('data-id'));
+
+    // 1차 확인
+    if (!confirm(`정말 삭제할까요? (id=${id})`)) return;
+
+    // 관리자 PIN 입력 (하드코딩 4333, 형식만 체크)
+    const pin = prompt('관리자 PIN을 입력하세요 (4자리)');
+    if (pin == null) return;                 // 취소
+    if (!/^\d{4}$/.test(pin)) {
+      alert('PIN 형식이 올바르지 않습니다.');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/users?id=${id}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-pin': pin }       // ← 워커로 PIN 전달
+      });
+
+      if (res.status === 401) {
+        alert('PIN이 올바르지 않습니다.');
+        return;
+      }
+      if (!res.ok) {
+        const data = await res.json().catch(()=>({}));
+        alert(`삭제 실패: ${data.error || res.status}`);
+        return;
+      }
+
+      // 성공 → 테이블에서 제거 후 재렌더
+      users = users.filter(x => x.id !== id);
+      displayUsers(users);
+
+    } catch (err) {
+      alert(`삭제 실패(네트워크/CORS): ${err?.message || err}`);
+    }
+  });
+});
+
+
+// ✅ 활성화 토글 이벤트
+tbody.querySelectorAll('.toggle-active').forEach(chk => {
+  chk.addEventListener('change', async e => {
+    const id = e.target.dataset.id;
+    const newState = e.target.checked ? 1 : 0;
+    try {
+      const res = await fetch(`${API_BASE}/users/active`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, active: newState })
+      });
+      if (!res.ok) {
+        alert('활성화 상태 변경 실패');
+        e.target.checked = !newState; // 실패 시 스위치 롤백
+        return;
+      }
+      
+      // ✅ 내부 배열(users) 상태 동기화
+      const user = users.find(u => String(u.id) === String(id));
+      if (user) user.active = newState;
+
+      // '비활성화 유저 안보기' 모드에서 비활성화 시켰다면 목록에서 즉시 숨김
+      if (!showInactive && newState === 0) {
+        displayUsers(users);
+      }
+    } catch (err) {
+      alert('네트워크 오류: ' + err.message);
+      e.target.checked = !newState; // 실패 시 스위치 롤백
+    }
+  });
+});
+
+
+}      // ✅ displayUsers 함수 닫기 (이 줄 추가!)
+
+
+
+
+  // 컬럼별 정렬
+  function sortUsers(column, ascending) {
+    users.sort((a, b) => {
+      const va = a[column];
+      const vb = b[column];
+      const na = typeof va === 'number' || !isNaN(+va);
+      const nb = typeof vb === 'number' || !isNaN(+vb);
+      if (na && nb) return ascending ? (+va - +vb) : (+vb - +va);
+      return ascending ? String(va).localeCompare(String(vb))
+                       : String(vb).localeCompare(String(va));
+    });
+    displayUsers(users);
+  }
+
+  window.sortUsers = sortUsers;
+  window.onload = () => fetchUsers();
+</script>
+
+  <style>
+  /* ===== j-lol mini nav (prefix: jl-) ===== */
+  .jl-mini-nav{
+    max-width: 1100px; margin: 8px auto 18px;
+    display:flex; flex-wrap:wrap; gap:10px; justify-content:center;
+  }
+  .jl-mini-card{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 12px; border-radius:12px;
+    background:#0f172a; color:#e5e7eb; text-decoration:none;
+    border:1px solid #1f2937; box-shadow:0 2px 10px rgba(0,0,0,.18);
+    font-size:14px; line-height:1; transition:.12s transform,.12s border-color,.12s box-shadow;
+  }
+  .jl-mini-card:hover{ transform:translateY(-1px); border-color:#334155; }
+  .jl-mini-card.is-active{
+    border-color:#60a5fa; box-shadow:0 0 0 2px rgba(96,165,250,.25) inset, 0 2px 10px rgba(0,0,0,.2);
+  }
+  .jl-mini-ico{ font-size:16px; opacity:.95 }
+  .jl-mini-badge{ font-size:11px; padding:2px 6px; border-radius:999px; margin-left:4px; background:#1f2937; color:#cbd5e1; }
+  /* 밝은 배경 페이지 호환 (선택) */
+  @media (prefers-color-scheme: light){
+    .jl-mini-card{ background:#ffffff; color:#0f172a; border-color:#e5e7eb; }
+    .jl-mini-card.is-active{ border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.2) inset; }
+    .jl-mini-badge{ background:#eef2ff; color:#1e40af; }
+  }
+
+/* ✅ 토글 스위치 */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+.switch input { display:none; }
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0;
+  right: 0; bottom: 0;
+  background-color: #ccc;
+  transition: .3s;
+  border-radius: 22px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px; width: 16px;
+  left: 3px; bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+}
+input:checked + .slider {
+  background-color: #3b82f6;
+}
+input:checked + .slider:before {
+  transform: translateX(18px);
+}
+
+
+    /* Offline VIP.html과 동일한 톤을 맞춤 */
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #0056b3;
+      text-align: center;
+      margin-top: 0;
+    }
+        .hint {
+      color: #666;
+      font-size: 12px;
+      text-align: center;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    table, th, td { border: 1px solid #ddd; }
+    th, td { padding: 8px; text-align: left; }
+    th { background-color: #f4f4f9; }
+    .sort-button {
+      background: none;
+      border: none;
+      color: #0056b3;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 0 2px;
+    }
+    .btn-del {
+      background: #ef4444;
+      color: #fff;
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-del:hover { background: #dc2626; }
+    .muted { color: #666; font-size: 12px; }
+    /* 🕒 커스텀 툴팁 스타일 (반응속도 즉각적, 크기 확대) */
+    /* 🕒 커스텀 툴팁 스타일 (반응속도 즉각적, 크기 확대) */
+    .custom-tooltip {
+      position: relative;
+      cursor: help;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-bottom: 1px dotted #94a3b8;
+    }
+    .custom-tooltip .tooltip-box {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #1e293b;
+      color: #f8fafc;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.1s ease, visibility 0.1s ease;
+      pointer-events: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 100;
+    }
+    .custom-tooltip .tooltip-box::before {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 6px solid transparent;
+      border-top-color: #1e293b;
+    }
+    .custom-tooltip:hover .tooltip-box {
+      opacity: 1;
+      visibility: visible;
+    }
+  </style>
+</html>

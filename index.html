@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>젤리🐛의 내전 도우미 · 메인</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐛</text></svg>">
+
+  <style>
+    :root{
+      --blue:#2563eb; --blue-700:#1d4ed8;
+      --red:#dc2626; --red-700:#b91c1c;
+      --green:#28a745; --green-700:#218838;
+      --purple:#9333ea; --purple-700:#7e22ce;
+      --orange:#f97316; --orange-700:#c2410c;
+      --brown:#92400e; --brown-700:#78350f;
+
+      --bg:#f4f4f9; --card:#fff; --edge:#e5e7eb; --text:#0f172a; --sub:#64748b;
+    }
+    *{box-sizing:border-box}
+    body { font-family: Arial, sans-serif; background:var(--bg); color:var(--text); margin:0; padding:20px; position: relative; }
+    h1 { 
+  color:#0056b3; 
+  margin:0 0 8px; 
+  text-align:center; 
+  font-size: 32px; 
+  position: relative; /* 추가 */
+  z-index: 2;         /* 추가 */
+}
+
+.sub { 
+  color:var(--sub); 
+  font-size:12px; 
+  margin:6px 0 18px; 
+  text-align:center; 
+  position: relative; /* 추가 */
+  z-index: 2;         /* 추가 */
+}
+
+    .grid{
+  display:grid; gap:16px; max-width:1100px; margin:0 auto;
+  grid-template-columns: repeat( auto-fit, minmax(280px, 1fr) );
+  position: relative; /* 추가: 카드 전체 영역을 자크 위로 끌어올림 */
+  z-index: 2;         /* 추가 */
+}
+
+.card{
+  background:var(--card); border:1px solid var(--edge); border-radius:12px;
+  padding:18px; min-height:170px; display:flex; flex-direction:column; gap:10px;
+  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  position: relative; /* ★ 필수 추가: 이게 없으면 z-index가 작동하지 않습니다! */
+  z-index: 2;         /* 1 -> 2로 변경 */
+}
+    .card.clickable{ cursor:pointer; }
+    .card.clickable:hover{ transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.08); border-color:#d0d7de; }
+
+    .card h3{ margin:0; font-size:18px; color:#0f172a; }
+    .desc{ color:#475569; line-height:1.5; font-size:14px; }
+    .pill{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; margin-right:6px; color:#fff; }
+    .pill.blue{ background:var(--blue); } .pill.red{ background:var(--red); } .pill.green{ background:var(--green); } .pill.purple{ background:var(--purple); } .pill.orange{ background:var(--orange); }  .pill.brown{ background:var(--brown); }
+    .actions{ margin-top:auto; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .btn-link{ background:#eef2ff; color:#1e40af; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; }
+    .btn-link:hover{ background:#e0e7ff; }
+    .note { color:#94a3b8; font-size:12px; }
+
+    /* 유저 추가 카드 전용 */
+    .mini-form{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .mini-form input, .mini-form select{
+      padding:8px; border:1px solid #cbd5e1; border-radius:8px; min-width:120px;
+    }
+    .btn { background:#007bff; color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; }
+    .btn:hover { background:#0056b3; }
+    .msg { color:#334155; font-size:13px; min-height:18px; }
+
+  /* prefix: pos- */
+  .pos-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1000;}
+  .pos-modal{width:min(900px,calc(100vw - 24px));background:#0f172a;border:1px solid #1f2937;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:16px;}
+  .pos-header{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .pos-title{font-size:18px;font-weight:800}
+  .pos-search{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+  .pos-search input{flex:1;min-width:200px;padding:10px;border-radius:10px;border:1px solid #334155;background:#0b1220;color:#e5e7eb}
+  .pos-list{max-height:300px;overflow:auto;border:1px solid #1f2937;border-radius:10px;padding:6px;background:#0b1220}
+  .pos-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:10px;cursor:pointer}
+  .pos-item:hover{background:#0f172a}
+  .pos-badges{display:flex;gap:6px}
+  .pos-badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid #334155;background:#0f172a;color:#cbd5e1}
+  .pos-badge.any{opacity:.7}
+  .pos-editor{margin-top:12px;border-top:1px dashed #334155;padding-top:12px;display:none}
+  .pos-row{display:flex;gap:10px;align-items:center;margin:8px 0}
+  .pos-buttons{display:flex;gap:8px;flex-wrap:wrap}
+  .pos-btn{padding:10px 12px;border-radius:12px;border:1px solid #334155;background:#0b1220;color:#e5e7eb;cursor:pointer;font-weight:700}
+  .pos-btn:hover{border-color:#475569}
+  .pos-btn.active{outline:2px solid #60a5fa}
+  .pos-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+  .pos-ghost{background:transparent;border:1px solid #334155;color:#e5e7eb}
+  .pos-close{margin-left:auto}
+  /* 색상 힌트 */
+  .k-any{background:#1f2937}
+  .k-top{background:#fb923c;color:#111827}
+  .k-jgl{background:#34d399;color:#111827}
+  .k-mid{background:#a78bfa;color:#111827}
+  .k-adc{background:#facc15;color:#111827}
+  .k-sup{background:#38bdf8;color:#111827}
+/* 모달 안 텍스트를 밝게 */
+.pos-modal{ color:#e5e7eb; }                /* 본문 기본 색 */
+.pos-title{ color:#e5e7eb; }                /* 제목 색 */
+.pos-item > div:first-child{ color:#e5e7eb } /* 왼쪽 유저명 컬럼 */
+/* 특정 카드를 그리드에서 2칸(span 2) 쓰도록 */
+.card.span-2 { grid-column: span 2; }
+
+/* 화면이 좁을 땐 자동으로 한 칸만(모바일 대응) */
+@media (max-width: 720px){
+  .card.span-2 { grid-column: auto; }
+}
+.logo-imo{ width:64px; height:64px; vertical-align:middle; margin:0 4px; object-fit:contain; }
+
+/* --- 떠다니는 자크 스타일 --- */
+
+#floatingZac, #jumpingZac {
+  position: fixed !important;          
+  top: 0; left: 0;          
+  width: 150px;             
+  height: auto;
+  /* !important를 붙여 외부 JS나 중복된 CSS의 9999 값을 강제로 씹어버립니다 */
+  z-index: 0 !important;               
+  pointer-events: none !important;     
+  will-change: transform;   
+  filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.3));
+}
+  </style>
+</head>
+
+<body>
+
+  <audio id="sfx-add" preload="auto">
+    <source src="/sfx/Achievement_unlocked.ogg" type="audio/ogg">
+  </audio>
+
+  <h1><img class="logo-imo" src="/img/Zac_imo.png" alt="자크">젤리의 내전 도우미 for BEAST Gaming</h1>
+  <div class="sub"> 시즌 2026 · 메인 대시보드</div>
+
+
+
+  <div class="pos-modal-backdrop" id="posBackdrop" aria-hidden="true">
+    <div class="pos-modal" role="dialog" aria-modal="true">
+      <div class="pos-header">
+        <div class="pos-title">유저 선택</div>
+        <button class="pos-btn pos-ghost pos-close" id="posClose" type="button">닫기</button>
+      </div>
+      <div class="pos-search">
+        <input id="posSearch" placeholder="유저 검색 (이름 일부, 대소문자 무관)" />
+        <label style="display:flex;gap:6px;align-items:center">
+          <input type="checkbox" id="posOnlyEmpty" /> 미정만 보기
+        </label>
+      </div>
+      <div class="pos-list" id="posList" aria-label="유저 목록"></div>
+      <div class="note" style="margin-top:8px;color:#94a3b8">
+        유저를 클릭하면 모달이 닫히고, 카드에서 포지션을 편집합니다.
+      </div>
+    </div>
+  </div>
+
+
+  <div class="grid">
+    <div class="card clickable" data-href="match_maker.html">
+      <div>
+        ⚖️ <span class="pill red">팀 섞기</span>
+        <h3>실력별 팀 분배</h3>
+      </div>
+      <div class="desc">
+        전체 유저 중 10명을 고른 뒤, 실력 점수 합이 비슷하도록 <b>5:5 자동 분배</b>합니다.
+        결과 카드에서 <b>승리 팀 기록</b>도 바로 가능해요.
+      </div>
+      <div class="actions">
+        <button class="btn-link open">열기</button>
+        <span class="note">match_maker.html</span>
+      </div>
+    </div>
+
+    <div class="card clickable" data-href="auction.html">
+      <div>
+        🎯 <span class="pill purple">실시간</span>
+        <h3>경매로 선수 입찰</h3>
+      </div>
+      <div class="desc">
+        팀장이 확정되면 <b>전광판</b>으로 카운트·입찰 중계가 동기화됩니다.
+        +1/+5/+10/+50/+100/+200/+500으로 <b>누적 입찰</b> 가능!
+      </div>
+      <div class="actions">
+        <button class="btn-link open">열기</button>
+        <span class="note">auction.html</span>
+      </div>
+    </div>
+    <div class="card clickable" data-href="match_position.html">
+      <div>
+        🎭 <span class="pill brown">팀 섞기</span>
+        <h3>포지션별 팀 분배</h3>
+      </div>
+      <div class="desc">
+        전체 유저 중 10명을 고른 뒤, 포지션이 맞도록 <b>5:5 자동 분배</b>합니다.
+        결과 카드에서 <b>승리 팀 기록</b>도 바로 가능해요.
+      </div>
+      <div class="actions">
+        <button class="btn-link open">열기</button>
+        <span class="note">match_position.html</span>
+      </div>
+    </div>
+
+
+    <div class="card clickable" data-href="fearless.html">
+  <div>
+    🧩 <span class="pill orange">공유</span>
+    <h3>Fearless 밴픽 시뮬레이터</h3>
+  </div>
+  <div class="desc">
+    <b>챔피언 초상화</b>를 클릭해 선택하면 회색으로 표시되며,<br>
+    선택된 상태는 <b>모든 접속자에게 실시간 공유</b>됩니다.<br>
+    Fearless 룰에 맞춰 <b>중복 선택 방지</b>용으로 사용할 수 있습니다.
+  </div>
+  <div class="actions">
+    <button class="btn-link open">열기</button>
+    <span class="note">fearless.html</span>
+  </div>
+</div>
+
+<div class="card clickable" data-href="memorable.html">
+  <div>
+    🎬 <span class="pill red">박제</span>
+    <h3>명예/치욕 의 전당</h3>
+  </div>
+  <div class="desc">
+    내전의 <b>명장면</b>과 <b>하이라이트</b>를 모아놓은 영상 저장소입니다.<br>
+    그날의 슈퍼플레이를 <b>고화질</b>로 다시 감상해보세요!
+  </div>
+  <div class="actions">
+    <button class="btn-link open">열기</button>
+    <span class="note">memorable.html</span>
+  </div>
+</div>
+
+
+    <div class="card clickable" data-href="result_upload.html">
+      <div>
+        📝 <span class="pill green">입력</span>
+        <h3>승패 자동 업로더</h3>
+      </div>
+      <div class="desc">
+        <b>승패 업로더 </b> 프로그램을 다운받은 후 
+        내전 결과를 DB에 자동 업로드합니다.
+        점수 ±1, 승/패를 결과 테이블 반영합니다. <b>라이엇 아이디</b>를
+         저장해야합니다.
+      </div>
+      <div class="actions">
+        <button class="btn-link open">열기</button>
+        <span class="note">result_upload.html</span>
+      </div>
+    </div>
+
+    <div class="card clickable" data-href="game_results.html">
+      <div>
+        📊 <span class="pill blue">기록</span>
+        <h3>게임 결과</h3>
+      </div>
+      <div class="desc">
+        최근 경기 기록을 <b>플레이어 이름까지 조인</b>해서 보여줍니다.
+        잘못 기록한 줄은 <b>삭제하면 자동 롤백</b>돼요(점수/승패 되돌림).
+      </div>
+      <div class="actions">
+        <button class="btn-link open">열기</button>
+        <span class="note">game_results.html</span>
+      </div>
+    </div>
+
+    <div class="card clickable" data-href="players.html">
+      <div>
+        👥 <span class="pill green">관리</span>
+        <h3>유저 목록</h3>
+      </div>
+      <div class="desc">
+        모든 유저의 <b>점수/승패/승율/포지션/가입일/갱신/</b>을 확인하고, 필요시 유저정보를 완전히 삭제할 수 있습니다.
+      </div>
+      <div class="actions">
+        <button class="btn-link open">열기</button>
+        <span class="note">players.html</span>
+      </div>
+    </div>
+
+<div class="card clickable" data-href="player_graph.html">
+      <div>
+        🪪 <span class="pill orange">리포트</span>
+        <h3>유저 프로필 리포트</h3>
+      </div>
+      <div class="desc">
+        최신 인게임 데이터를 기반으로 <b>육각형 지표(공격/생존/파밍/시야/승률/캐리)</b>와 <b>숙련도 챔피언</b>, <b>선호 아이템</b>을 카드로 확인합니다.
+        실력점수 순 <b>티어 배정</b>과 함께 카드가 <b>자동 무한 롤링</b>됩니다.
+      </div>
+      <div class="actions">
+        <button class="btn-link open">열기</button>
+        <span class="note">player_graph.html</span>
+      </div>
+    </div>
+
+
+        <div class="card clickable" data-href="coin_toss.html">
+      <div>
+        🌓 <span class="pill purple">랜덤</span>
+        <h3>코인 토스</h3>
+      </div>
+      <div class="desc">
+        코인 던지기 <b>베이가/나서스</b>로 <b>블루/레드</b>를 공정하게 정합니다.
+        브라우저의 <b>crypto RNG</b>로 결과가 결정되어 신뢰할 수 있어요.
+      </div>
+      <div class="actions">
+        <button class="btn-link open">열기</button>
+        <span class="note">coin_toss.html</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div>
+        🙋 <span class="pill green">신규</span>
+        <h3>유저 추가</h3>
+      </div>
+      <div class="desc">
+        새 유저를 등록합니다. 점수는 티어 선택값으로 초기화되며, 이후 경기 결과에 따라 자동 반영됩니다.
+      </div>
+      <div class="mini-form">
+        <input id="username" placeholder="닉네임" />
+        <select id="rating">
+          <option value="0">아이언4</option>
+          <option value="1">아이언3</option>
+          <option value="2">아이언2</option>
+          <option value="3">아이언1</option>
+          <option value="4">브론즈4</option>
+          <option value="5">브론즈3</option>
+          <option value="6">브론즈2</option>
+          <option value="7">브론즈1</option>
+          <option value="8">실버4</option>
+          <option value="9">실버3</option>
+          <option value="10">실버2</option>
+          <option value="11">실버1</option>
+          <option value="12">골드4</option>
+          <option value="13">골드3</option>
+          <option value="14">골드2</option>
+          <option value="15">골드1</option>
+          <option value="16">플래4</option>
+          <option value="17">플래3</option>
+          <option value="18">플래2</option>
+          <option value="19">플래1</option>
+          <option value="20">에메4</option>
+          <option value="21">에메3</option>
+          <option value="22">에메2</option>
+          <option value="23">에메1</option>
+          <option value="24">다이아4</option>
+          <option value="25">다이아3</option>
+          <option value="26">다이아2</option>
+          <option value="27">다이아1</option>
+          <option value="30">마스터</option>
+          <option value="40">그랜드마스터</option>
+          <option value="50">챌린저</option>
+        </select>
+        <button id="addBtn" class="btn">추가</button>
+      </div>
+      <div id="msg" class="msg"></div>
+      <div class="note">이 카드는 입력 전용입니다(링크 없음).</div>
+    </div>
+    
+
+    <div class="card" id="posCard">
+  <div>
+    📌 <span class="pill blue">수정</span>
+    <h3>포지션 편집</h3>
+  </div>
+  <div class="desc">
+    유저를 <b>검색/선택</b>한 뒤, 카드에서 <b>주/부 포지션</b>을 지정합니다.
+    기본값은 올라운더로 저장됩니다.
+  </div>
+
+  <div id="posSelected" class="pos-badges" style="margin:4px 0 8px; min-height:28px;"></div>
+
+  <div id="posInline" style="display:none">
+    <div class="pos-row">
+      <div style="min-width:82px">주 포지션</div>
+      <div class="pos-buttons" id="cardBtnsMain" data-target="main"></div>
+    </div>
+    <div class="pos-row">
+      <div style="min-width:82px">부 포지션</div>
+      <div class="pos-buttons" id="cardBtnsSub" data-target="sub"></div>
+    </div>
+  </div>
+
+  <div class="actions" style="justify-content:flex-end">
+    <button class="btn-link open" id="posPickUser">유저 선택</button>
+    <button class="btn-link open" id="posSaveCard" style="display:none">저장</button>
+    <span class="note" id="posCardMsg"></span>
+  </div>
+</div>
+
+<!-- 🎮 라이엇 계정 관리 카드 (posCard 바로 밑에 삽입) -->
+<div class="card" id="riotCard">
+  <div>
+    🎮 <span class="pill orange">연동</span>
+    <h3>라이엇 계정 관리</h3>
+  </div>
+  <div class="desc">
+    유저를 <b>검색/선택</b>한 뒤, <b>라이엇 ID (최대 3개)</b>를 등록·수정합니다. (예: <code>소환사명#KR1</code>)
+  </div>
+
+  <div id="riotSelected" class="pos-badges" style="margin:4px 0 8px; min-height:28px;"></div>
+
+  <div id="riotInline" style="display:none">
+    <div style="display:flex; flex-direction:column; gap:6px; margin:8px 0;">
+      <input id="riotInput1" placeholder="주 계정 (예: 젤리#KR1)" style="padding:8px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc;" />
+      <input id="riotInput2" placeholder="부 계정 1 (선택)" style="padding:8px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc;" />
+      <input id="riotInput3" placeholder="부 계정 2 (선택)" style="padding:8px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc;" />
+    </div>
+  </div>
+
+  <div class="actions" style="justify-content:flex-end">
+    <button class="btn-link open" id="riotPickUser">유저 선택</button>
+    <button class="btn-link open" id="riotSaveCard" style="display:none">저장</button>
+    <span class="note" id="riotCardMsg"></span>
+  </div>
+</div>
+
+
+
+
+
+  </div><script>
+  // ... (기존 유저 추가, 카드 링크 등의 스크립트 내용 - 생략해도 됨) ...
+  const API_BASE = (window.API_BASE) || 'https://wispy-recipe-b8f5.3alzak.workers.dev/api';
+
+    // 카드 전체 클릭 → data-href로 이동 (버튼/폼은 제외)
+    document.querySelectorAll('.card.clickable').forEach(card=>{
+      const href = card.getAttribute('data-href');
+      if (!href) return;
+      card.addEventListener('click', (e)=>{
+        if (e.target && (e.target.closest('.btn-link') || e.target.closest('.mini-form'))) return;
+        window.open(href, '_blank');
+      });
+    });
+    // "열기" 버튼
+    document.querySelectorAll('.btn-link.open').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        const card = e.target.closest('.card');
+        const href = card?.getAttribute('data-href');
+        if (href) window.open(href, '_blank');
+      });
+    });
+
+  /* ===== 유저 추가 카드 ===== */
+  async function addUser() {
+    const userIdEl = document.getElementById('username');
+    const ratingEl = document.getElementById('rating');
+    const msg = document.getElementById('msg');
+    const userId = (userIdEl?.value || '').trim();
+    const rating = parseInt(ratingEl?.value || '0', 10);
+    if (!userId){ if (msg) msg.textContent = '유저 이름을 입력하세요.'; return; }
+
+    // 👇 초기 점수(rating_start)도 동일 값으로 전송
+    const payload = { userId, rating, rating_start: rating };
+
+    try{
+      const res = await fetch(`${API_BASE}/users`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json().catch(()=> ({}));
+      if (res.ok){
+        if (msg) msg.textContent =
+          `추가 성공: ${data.user?.user_id ?? userId} (점수 ${data.user?.rating ?? rating}, 초기 ${payload.rating_start})`;
+        if (userIdEl) userIdEl.value = '';
+        if (ratingEl) ratingEl.value = 0;
+        // SFX
+        const s = document.getElementById('sfx-add');
+        if (s){ try{ s.currentTime=0; s.volume=1.0; s.play().catch(()=>{}); }catch{} }
+      }else{
+        if (msg) msg.textContent = `실패: ${data.error || res.status}`;
+      }
+    }catch(e){
+      if (msg) msg.textContent = '서버 오류';
+    }
+  }
+
+  const addBtn = document.getElementById('addBtn');
+  if (addBtn){
+    addBtn.addEventListener('click', addUser);
+    addBtn.addEventListener('pointerdown', ()=>{ // iOS/Safari 오디오 언락
+      const a = document.getElementById('sfx-add');
+      a?.play()?.then(()=>a.pause()).catch(()=>{});
+    }, { once:true });
+  }
+
+
+/* ===== 📌 포지션 편집 스크립트 ===== */
+/* ===== 📌 포지션 편집 스크립트 ===== */
+(function(){
+  const API_BASE = (window.API_BASE) || 'https://wispy-recipe-b8f5.3alzak.workers.dev/api';
+
+  // 주 포지션 버튼 목록
+  const POS_MAIN = [
+    {code:'',  label:'올라운더', cls:'k-any'},
+    {code:'T', label:'탑',       cls:'k-top'},
+    {code:'J', label:'정글',     cls:'k-jgl'},
+    {code:'M', label:'미드',     cls:'k-mid'},
+    {code:'A', label:'원딜',     cls:'k-adc'},
+    {code:'S', label:'서폿',     cls:'k-sup'},
+  ];
+
+  // 부 포지션 버튼 목록 (맨 앞에 [🚫 없음] 추가)
+  const POS_SUB = [
+    {code:'NONE', label:'🚫 없음', cls:'k-any'},
+    ...POS_MAIN,
+  ];
+
+  // 라벨 및 클래스 맵 생성 (통합)
+  const ALL_POS = [...POS_SUB];
+  const POS_LABEL = Object.fromEntries(ALL_POS.map(p => [p.code, p.label]));
+  const POS_CLS   = Object.fromEntries(ALL_POS.map(p => [p.code, p.cls]));
+
+  // 상태
+  let users = [];
+  let filtered = [];
+  let selectedIdx = -1;
+  let sel = { id:null, name:'', main:'', sub:'' };
+
+  // DOM
+  const $ = s => document.querySelector(s);
+  const backdrop = $('#posBackdrop');
+  const listEl   = $('#posList');
+  const searchEl = $('#posSearch');
+  const onlyEmptyEl = $('#posOnlyEmpty');
+
+  const posSelected  = $('#posSelected');
+  const posInline    = $('#posInline');
+  const cardBtnsMain = $('#cardBtnsMain');
+  const cardBtnsSub  = $('#cardBtnsSub');
+  const posSaveCard  = $('#posSaveCard');
+  const posCardMsg   = $('#posCardMsg');
+
+  // 포지션 요약 텍스트 생성 헬퍼
+  function formatPosText(main, sub) {
+    const POS_ICON = { T:'🛡️ 탑', J:'🌳 정글', M:'🧙🏻‍♂️ 미드', A:'🏹 원딜', S:'🛠️ 서폿', NONE:'🚫 없음' };
+    if (!main) return '🤖 올라운더';
+    const mainTxt = POS_ICON[main] || '🤖 올라운더';
+
+    const subTxt = POS_ICON[sub] || '';
+    return subTxt ? `${mainTxt} | ${subTxt}` : mainTxt;
+  }
+
+  // 모달 목록용 뱃지
+  function badge(code){
+    const label = POS_LABEL[code] ?? '—';
+    const cls = POS_CLS[code] ?? 'k-any';
+    return `<span class="pos-badge ${code ? '' : 'any'} ${cls}">${label}</span>`;
+  }
+
+  // 카드 UI 렌더링
+  function renderCard(){
+    if(!sel.id){
+      posSelected.innerHTML = '<span class="pos-badge any">먼저 유저를 선택하세요</span>';
+      posInline.style.display = 'none';
+      posSaveCard.style.display = 'none';
+      posCardMsg.textContent = '';
+      return;
+    }
+
+    // 상단 요약 문구
+    posSelected.innerHTML = `<span class="pos-badge" style="background:#2563eb; color:#fff;">${sel.name}</span> ` + formatPosText(sel.main, sel.sub);
+
+    // 주 포지션 버튼
+    cardBtnsMain.innerHTML = POS_MAIN.map(p =>
+      `<button type="button" class="pos-btn ${sel.main===p.code?'active':''}" data-where="main" data-code="${p.code}">${p.label}</button>`
+    ).join('');
+
+    // 부 포지션 버튼 (POS_SUB 사용)
+    cardBtnsSub.innerHTML = POS_SUB.map(p =>
+      `<button type="button" class="pos-btn ${sel.sub===p.code?'active':''}" data-where="sub" data-code="${p.code}">${p.label}</button>`
+    ).join('');
+
+    posInline.style.display = '';
+    posSaveCard.style.display = '';
+    posCardMsg.textContent = '';
+  }
+
+  // 모달 사용자 목록 렌더링
+  function renderList(){
+    if (window._pickerMode !== 'pos') return;
+    const q = (searchEl.value||'').toLowerCase();
+    const onlyEmpty = !!onlyEmptyEl.checked;
+    filtered = users.filter(u => {
+      const okQ = !q || (u.user_id||'').toLowerCase().includes(q);
+      const okE = !onlyEmpty || (!u.position_main && !u.position_sub);
+      return okQ && okE;
+    });
+    listEl.innerHTML = filtered.map((u,i) => `
+      <div class="pos-item" data-i="${i}">
+        <div>${u.user_id}</div>
+        <div class="pos-badges">
+          ${badge(u.position_main||'')} ${badge(u.position_sub||'')}
+        </div>
+      </div>
+    `).join('') || '<div class="pos-item" style="opacity:.7;cursor:default">검색 결과 없음</div>';
+  }
+
+  // 모달 열기
+  async function openPicker(){
+    window._pickerMode = 'pos';
+    posCardMsg.textContent = '';
+    try{
+      const r = await fetch(`${API_BASE}/users`, {cache:'no-store'});
+      users = await r.json();
+    }catch{ users = []; }
+    renderList();
+    backdrop.style.display = 'flex';
+    setTimeout(()=> searchEl.focus(), 0);
+  }
+
+  function closePicker(){
+    backdrop.style.display = 'none';
+  }
+
+  // 카드 버튼 클릭 (주/부 포지션 지정)
+  document.addEventListener('click', (e)=>{
+    const b = e.target.closest('.pos-btn');
+    if(!b) return;
+    if(!b.closest('#cardBtnsMain') && !b.closest('#cardBtnsSub')) return;
+    
+    const code = b.dataset.code;
+    const where = b.dataset.where;
+
+    if(where === 'main'){
+      sel.main = code;
+      if(sel.sub === sel.main) sel.sub = '';
+    } else {
+      sel.sub = code;
+      if(sel.sub === sel.main) sel.sub = '';
+    }
+    renderCard();
+  });
+
+  // 모달에서 유저 클릭
+  listEl.addEventListener('click', (e)=>{
+    if (window._pickerMode !== 'pos') return;
+    const item = e.target.closest('.pos-item');
+    if(!item) return;
+    selectedIdx = Number(item.dataset.i);
+    const u = filtered[selectedIdx];
+    sel = {
+      id: u.id,
+      name: u.user_id,
+      main: u.position_main || '',
+      sub:  u.position_sub  || ''
+    };
+    closePicker();
+    renderCard();
+  });
+
+  // 저장 (PATCH /api/users/position)
+  async function savePositions(){
+    if(!sel.id) return;
+    posCardMsg.textContent = '저장 중...';
+    try{
+      const res = await fetch(`${API_BASE}/users/position`, {
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ id: sel.id, position_main: sel.main, position_sub: sel.sub })
+      });
+      const data = await res.json().catch(()=> ({}));
+      if(!res.ok){
+        posCardMsg.textContent = `실패: ${data.error || res.status}`;
+        return;
+      }
+      const idx = users.findIndex(x=>x.id===sel.id);
+      if(idx>=0){ users[idx].position_main = sel.main; users[idx].position_sub = sel.sub; }
+      posCardMsg.textContent = '저장됨!';
+    }catch(e){
+      posCardMsg.textContent = '서버 오류';
+    }
+  }
+
+  // 이벤트 바인딩
+  $('#posPickUser')?.addEventListener('click', openPicker);
+  $('#posSaveCard')?.addEventListener('click', savePositions);
+  $('#posClose')?.addEventListener('click', closePicker);
+
+  searchEl.addEventListener('input', renderList);
+  onlyEmptyEl.addEventListener('change', renderList);
+
+  renderCard();
+})();
+
+
+/* ===== 🎮 라이엇 계정 관리 스크립트 ===== */
+/* ===== 🎮 라이엇 계정 관리 스크립트 ===== */
+(function(){
+  const API_BASE = (window.API_BASE) || 'https://wispy-recipe-b8f5.3alzak.workers.dev/api';
+
+  let users = [];
+  let filtered = [];
+  let sel = { id: null, name: '', r1: '', r2: '', r3: '' };
+
+  const $ = s => document.querySelector(s);
+  const backdrop = $('#posBackdrop');
+  const listEl   = $('#posList');
+  const searchEl = $('#posSearch');
+  const onlyEmptyEl = $('#posOnlyEmpty');
+
+  const selectedBox = $('#riotSelected');
+  const inlineBox   = $('#riotInline');
+  const saveBtn     = $('#riotSaveCard');
+  const msgEl       = $('#riotCardMsg');
+
+  // 카드 UI 렌더링
+  function renderCard() {
+    if (!sel.id) {
+      selectedBox.innerHTML = '<span class="pos-badge any">먼저 유저를 선택하세요</span>';
+      inlineBox.style.display = 'none';
+      saveBtn.style.display = 'none';
+      msgEl.textContent = '';
+      return;
+    }
+
+    selectedBox.innerHTML = `<span class="pos-badge" style="background:#2563eb; color:#fff;">${sel.name}</span>`;
+    $('#riotInput1').value = sel.r1 || '';
+    $('#riotInput2').value = sel.r2 || '';
+    $('#riotInput3').value = sel.r3 || '';
+
+    inlineBox.style.display = '';
+    saveBtn.style.display = '';
+    msgEl.textContent = '';
+  }
+
+  // 모달 렌더링 (공백 무시 및 부분 일치 검색)
+  function renderList() {
+    if (window._pickerMode !== 'riot') return;
+    const rawQ = (searchEl.value || '').toLowerCase().trim();
+    const q = rawQ.replace(/\s+/g, ''); // 검색어 공백 제거
+    const onlyEmpty = !!onlyEmptyEl.checked;
+
+    filtered = users.filter(u => {
+      const uName = (u.user_id || '').toLowerCase().replace(/\s+/g, '');
+      const r1 = (u.riot_id_1 || '').toLowerCase().replace(/\s+/g, '');
+      const r2 = (u.riot_id_2 || '').toLowerCase().replace(/\s+/g, '');
+      const r3 = (u.riot_id_3 || '').toLowerCase().replace(/\s+/g, '');
+
+      // 💡 닉네임 및 라이엇 계정 1~3 전체 대상 부분 검색
+      const okQ = !q || uName.includes(q) || r1.includes(q) || r2.includes(q) || r3.includes(q);
+      const okE = !onlyEmpty || (!u.riot_id_1 && !u.riot_id_2 && !u.riot_id_3);
+      return okQ && okE;
+    });
+
+    listEl.innerHTML = filtered.map((u, i) => {
+      const r1 = u.riot_id_1 ? `<span class="pos-badge">${u.riot_id_1}</span>` : '';
+      return `
+        <div class="pos-item" data-i="${i}">
+          <div>${u.user_id}</div>
+          <div class="pos-badges">${r1 || '<span class="pos-badge any">계정미등록</span>'}</div>
+        </div>
+      `;
+    }).join('') || '<div class="pos-item" style="opacity:.7;cursor:default">검색 결과 없음</div>';
+  }
+
+  // 라이엇용 모달 열기
+  async function openPicker() {
+    window._pickerMode = 'riot'; // 👈 라이엇 모드로 설정
+    msgEl.textContent = '';
+    try {
+      const r = await fetch(`${API_BASE}/users`, { cache: 'no-store' });
+      users = await r.json();
+    } catch { users = []; }
+    renderList();
+    backdrop.style.display = 'flex';
+    setTimeout(() => searchEl.focus(), 0);
+  }
+
+  // 모달 유저 클릭 이벤트
+  listEl.addEventListener('click', (e) => {
+    if (window._pickerMode !== 'riot') return;
+    const item = e.target.closest('.pos-item');
+    if (!item) return;
+
+    const idx = Number(item.dataset.i);
+    const u = filtered[idx];
+    if (u) {
+      sel = {
+        id: u.id,
+        name: u.user_id,
+        r1: u.riot_id_1 || '',
+        r2: u.riot_id_2 || '',
+        r3: u.riot_id_3 || ''
+      };
+      backdrop.style.display = 'none';
+      renderCard();
+    }
+  });
+
+  // 라이엇 ID 저장 (PATCH /api/users/riot-id)
+  async function saveRiotIds() {
+    if (!sel.id) return;
+    msgEl.textContent = '저장 중...';
+
+    const r1 = $('#riotInput1').value.trim();
+    const r2 = $('#riotInput2').value.trim();
+    const r3 = $('#riotInput3').value.trim();
+
+    try {
+      const res = await fetch(`${API_BASE}/users/riot-id`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sel.id, riot_id_1: r1, riot_id_2: r2, riot_id_3: r3 })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        msgEl.textContent = `실패: ${data.error || res.status}`;
+        return;
+      }
+      sel.r1 = r1; sel.r2 = r2; sel.r3 = r3;
+      msgEl.textContent = '저장됨!';
+    } catch (e) {
+      msgEl.textContent = '서버 오류';
+    }
+  }
+
+  // 🚀 누락되었던 검색창 및 필터 이벤트 바인딩
+  $('#riotPickUser')?.addEventListener('click', openPicker);
+  $('#riotSaveCard')?.addEventListener('click', saveRiotIds);
+  searchEl?.addEventListener('input', renderList);
+  onlyEmptyEl?.addEventListener('change', renderList);
+
+  // 초기 상태
+  renderCard();
+})();
+</script>
+<script src="zac.js"></script>
+<script src="chat_widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,1118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>젤리🐛의 내전 도우미 ·실력별 팀 분배</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐛</text></svg>">
+
+</head>
+<body>
+
+  <h1>실력별 팀 분배</h1>
+
+<!-- ===== mini nav ===== -->
+<div id="nav-placeholder"></div>
+<script>
+fetch("nav.html")
+  .then(res => res.text())
+  .then(html => document.getElementById("nav-placeholder").innerHTML = html);
+</script>
+
+  <!-- 팀 섞기 카드 -->
+  <div class="card" id="mixCard">
+    <h3>팀 섞기</h3>
+      <div class="sub">💡 왼쪽에서 오른쪽으로 <b>드래그</b> 혹은 <b>클릭</b> 하여 참가자(0/10)를 구성하세요. <br><b>💡 더블 클릭</b>하면 그 참가자가 제거됩니다.</div>
+
+    <div class="row">
+      <!-- 전체 유저 -->
+      <div class="col">
+        <h4 style="text-align:center;">전체 유저 (실력점수)</h4>
+        <div id="allUsers" class="panel" aria-label="전체 유저 드롭 영역(제거용)">
+          <ul id="allList" class="list"></ul>
+          <div class="sub">💡 참가자를 이 카드로 드롭해도 제거됩니다.</div>
+        </div>
+      </div>
+
+      <!-- 참가자 -->
+      <div class="col">
+        <h4 style="text-align:center;">참가자 (드래그/클릭 하여 추가, <span id="selCount">0</span>/10)</h4>
+        <div id="dropZone" class="drop" aria-label="참가자 드롭 영역">
+          <ul id="selList" class="list"></ul>
+        </div>
+        <div style="margin-top:8px; display:flex; gap:8px; justify-content:center;">
+  <button id="clearSel" class="btn btn-ghost">참가자 비우기</button>
+  <button id="prevMembers" class="btn btn-ghost">이전 멤버</button>
+  <button id="mixBtn" class="btn" disabled>팀 섞기 (5:5)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 결과 카드 (분리) -->
+  <!-- 결과 카드 (분리) -->
+  <div class="card" id="resultCard">
+  <h3>팀 구성 & 결과</h3>
+  <div id="result" style="min-height:80px;"></div>
+  <div class="sub">💡 젤리 LoL 전용 업로더를 통해 인게임 전적을 DB에 기록하세요.</div>
+</div>
+<!-- 🧭 추천 포지션 카드 -->
+<div class="card" id="posCard" style="display:none;">
+  <h3>추천 포지션</h3>
+  <div id="posResult" style="min-height:80px;"></div>
+  <div class="sub">💡 각 팀의 주/부 포지션 기준으로 추천 포지션을 정렬했습니다.</div>
+</div>
+
+
+<audio id="sfxRoll"   src="sfx/slot_roll_loop.mp3" preload="auto" loop></audio>
+<audio id="sfxDecel"  src="sfx/slot_decel.mp3" preload="auto"></audio>
+<audio id="sfxTick"   src="sfx/slot_tick.mp3" preload="auto"></audio>
+<audio id="sfxFanfare"src="sfx/Deslizando_o_dedo_no_piano.ogg.mp3" preload="auto"></audio>
+<script>
+
+// ✅ 전체 유저 캐시 (id → 사용자) : 이전 경기에서 평점/이름 찾을 때 사용
+let allUsersData = [];
+let userById = new Map();
+
+
+  // 현재 페이지 자동 하이라이트
+  (function(){
+    const current = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    document.querySelectorAll('.jl-mini-nav .jl-mini-card').forEach(a=>{
+      const href = (a.getAttribute('href')||'').toLowerCase();
+      if (href && current.endsWith(href)) a.classList.add('is-active');
+    });
+  })();
+
+
+
+const API_BASE = 'https://wispy-recipe-b8f5.3alzak.workers.dev/api';
+
+/* ===== 유저 추가 ===== */
+async function addUser() {
+  const userId = document.getElementById('username').value.trim();
+  const rating = parseInt(document.getElementById('rating').value, 10);
+  const msg = document.getElementById('msg');
+  msg.textContent = '';
+  if (!userId) { msg.textContent = '유저 이름을 입력하세요.'; return; }
+
+  try {
+    const res = await fetch(`${API_BASE}/users`, {
+      method: 'POST', headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ userId, rating })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      msg.textContent = `추가 성공: ${data.user.user_id} (점수 ${data.user.rating})`;
+      document.getElementById('username').value = '';
+      document.getElementById('rating').value = 0;
+      await loadUsers();
+    } else {
+      msg.textContent = `실패: ${data.error || res.status}`;
+    }
+  } catch { msg.textContent = '서버 오류'; }
+}
+
+/* ===== 목록 로드 & 드래그 소스 만들기 ===== */
+const allUsers = document.getElementById('allUsers');
+const allList  = document.getElementById('allList');
+
+// --- 유저 리스트에서 항목 생성 ---
+// --- 유저 리스트에서 항목 생성 ---
+function makeDraggableItem(u) {
+  const li = document.createElement('li');
+  li.classList.add('user-item'); 
+
+  const posEmoji = {
+    'T': '🛡️ 탑', 'J': '🌳 정글', 'M': '🧙🏻‍♂️ 미드', 'A': '🏹 원딜', 'S': '🛠️ 서폿','NONE': '🚫 없음',
+    '': '🤖 올라운더', null: '🤖 올라운더', undefined: '🤖 올라운더'
+  };
+  const main = posEmoji[u.position_main] || '🤖 올라운더';
+  const sub  = posEmoji[u.position_sub]  || '';
+
+  li.innerHTML = `
+    <span class="user-left">${u.user_id} (${u.rating})</span>
+    <span class="user-right">${main}${sub ? ' | ' + sub : ''}</span>
+  `;
+
+  li.draggable = true;
+  li.dataset.id = u.id;
+  li.dataset.name = u.user_id;
+  li.dataset.rating = u.rating;
+  li.dataset.disharmony = u.disharmony || ''; // ✅ 상극 데이터 추가
+
+  li.addEventListener('click', () => {
+    addParticipant({ id: u.id, name: u.user_id, rating: u.rating, position_main: u.position_main, position_sub: u.position_sub, disharmony: u.disharmony });
+  });
+
+  li.addEventListener('dragstart', (e) => {
+    e.dataTransfer.setData('text/plain', JSON.stringify({
+      id:u.id, name:u.user_id, rating:u.rating, from:'all', disharmony: u.disharmony
+    }));
+  });
+
+  return li;
+}
+
+async function loadUsers() {
+  allList.innerHTML = '<li>불러오는 중...</li>';
+  try {
+    const res = await fetch(`${API_BASE}/users`);
+    const users = await res.json();
+
+    // ✅ 캐시 갱신
+    allUsersData = Array.isArray(users) ? users : [];
+    userById = new Map(allUsersData.map(u => [Number(u.id), u]));
+
+    allList.innerHTML = '';
+    if (!Array.isArray(allUsersData) || allUsersData.length === 0) {
+      allList.innerHTML = '<li>등록된 유저가 없습니다</li>'; return;
+    }
+    allUsersData.forEach(u => allList.appendChild(makeDraggableItem(u)));
+  } catch (err) {
+    console.error('loadUsers 실패:', err);
+    allList.innerHTML = '<li>유저 목록을 불러오지 못했습니다</li>';
+  }
+}
+
+
+/* ===== 드롭 영역(참가자) + 바깥 드롭 제거 ===== */
+const dropZone  = document.getElementById('dropZone');
+const selList   = document.getElementById('selList');
+const selCount  = document.getElementById('selCount');
+const clearSel  = document.getElementById('clearSel');
+const mixBtn    = document.getElementById('mixBtn');
+const resultBox = document.getElementById('result');
+
+let draggingSelId = null; // 참가자 li 드래그 중인 id를 추적
+
+function updateSelState() {
+  selCount.textContent = selList.children.length;
+  mixBtn.disabled = selList.children.length !== 10;
+}
+
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.background='#eef5ff'; });
+dropZone.addEventListener('dragleave', () => { dropZone.style.background=''; });
+
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault(); dropZone.style.background='';
+  try {
+    const d = JSON.parse(e.dataTransfer.getData('text/plain'));
+    if ([...selList.children].some(li => li.dataset.id === String(d.id))) return;
+    if (selList.children.length >= 10) return;
+
+    const li = document.createElement('li');
+    li.textContent = `${d.name} (${d.rating})`;
+    li.draggable = true;
+    li.dataset.id = d.id;
+    li.dataset.name = d.name;
+    li.dataset.rating = d.rating;
+    li.dataset.disharmony = d.disharmony || ''; // ✅ 상극 데이터 추가
+    li.title = '더블클릭: 참가자에서 제거';
+
+// 포지션 데이터(position_main, position_sub)와 상극 데이터(disharmony)를 모두 유지!
+    li.addEventListener('dragstart', (ev) => {
+      draggingSelId = String(d.id);
+      ev.dataTransfer.setData('text/plain', JSON.stringify({
+        id:d.id, name:d.name, rating:d.rating, from:'sel', 
+        position_main: d.position_main, position_sub: d.position_sub,
+        disharmony: d.disharmony
+      }));
+    });
+    li.addEventListener('dragend', () => { draggingSelId = null; });
+    li.addEventListener('dblclick', () => { li.remove(); updateSelState(); });
+
+    selList.appendChild(li);
+    updateSelState();
+  } catch {}
+});
+
+// 왼쪽 카드에 드롭해도 제거(옵션 유지)
+allUsers.addEventListener('dragover', (e) => e.preventDefault());
+allUsers.addEventListener('drop', (e) => {
+  e.preventDefault();
+  try {
+    const d = JSON.parse(e.dataTransfer.getData('text/plain'));
+    if (d.from === 'sel') {
+      const target = [...selList.children].find(li => li.dataset.id === String(d.id));
+      if (target) { target.remove(); updateSelState(); }
+    }
+  } catch {}
+});
+
+// ★ 화면 아무 곳으로 드롭해도 제거: dropZone 외부로 드롭 시 제거
+document.addEventListener('drop', (e) => {
+  // 참가자 아이템을 드래그 중이고, 드롭 지점이 dropZone 내부가 아니면 제거
+  if (draggingSelId && !dropZone.contains(e.target)) {
+    const target = [...selList.children].find(li => li.dataset.id === draggingSelId);
+    if (target) { target.remove(); updateSelState(); }
+  }
+});
+
+clearSel.addEventListener('click', () => { selList.innerHTML = ''; updateSelState(); });
+
+/* ===== 팀 섞기 (10명 → 5:5, 합계 차 최소) ===== */
+function getSelectedPlayers() {
+  return [...selList.children].map(li => ({
+    id: Number(li.dataset.id),
+    name: li.dataset.name,
+    rating: Number(li.dataset.rating),
+    position_main: li.dataset.position_main || '',
+    position_sub:  li.dataset.position_sub  || '',
+    disharmony: li.dataset.disharmony ? Number(li.dataset.disharmony) : null // ✅ 추가
+  }));
+}
+
+function bestSplit(players) {
+  const n = players.length, pick = 5;
+  let best = null;
+
+  // ✅ 상극 검사 함수
+  function isValidTeam(teamIndices) {
+    for (let i = 0; i < teamIndices.length; i++) {
+      const p1 = players[teamIndices[i]];
+      if (!p1.disharmony) continue; // 상극 설정이 없으면 패스
+
+      for (let j = 0; j < teamIndices.length; j++) {
+        if (i === j) continue;
+        const p2 = players[teamIndices[j]];
+        
+        // p1의 상극 대상이 같은 팀(p2)에 있다면 무효 처리! (서로 싸움)
+        if (p1.disharmony === p2.id || p2.disharmony === p1.id) {
+          return false; 
+        }
+      }
+    }
+    return true; // 아무 문제 없으면 합격
+  }
+
+  function dfs(start, chosen) {
+    if (chosen.length === pick) {
+      const set = new Set(chosen);
+      let a=0,b=0, A=[], B=[];
+      for (let i=0;i<n;i++){
+        if (set.has(i)) { a+=players[i].rating; A.push(i); }
+        else { b+=players[i].rating; B.push(i); }
+      }
+
+      // 🚨 상극(disharmony) 체크! A팀과 B팀 모두 문제 없어야 진행
+      if (!isValidTeam(A) || !isValidTeam(B)) return;
+
+      const diff = Math.abs(a - b);
+      if (!best || diff < best.diff || (diff === best.diff && Math.random() < 0.5)) {
+        best = { A, B, diff, sumA: a, sumB: b };
+      }
+      return;
+    }
+    for (let i=start;i<=n-(pick-chosen.length);i++){
+      chosen.push(i); dfs(i+1, chosen); chosen.pop();
+    }
+  }
+  dfs(0, []); return best;
+}
+
+
+function addParticipant({ id, name, rating, position_main, position_sub, disharmony }) {
+  if ([...selList.children].some(li => li.dataset.id === String(id))) return;
+  if (selList.children.length >= 10) return;
+
+  const li = document.createElement('li');
+  li.classList.add('user-item');
+
+  const posEmoji = {
+    'T': '🛡️ 탑', 'J': '🌳 정글', 'M': '🧙🏻‍♂️ 미드', 'A': '🏹 원딜', 'S': '🛠️ 서폿','NONE': '🚫 없음',
+    '': '🤖 올라운더', null: '🤖 올라운더', 'NONE': '🚫없음', undefined: '🤖 올라운더'
+  };
+  const main = posEmoji[position_main] || '🤖 올라운더';
+  const sub  = posEmoji[position_sub]  || '';
+
+  li.innerHTML = `
+    <span class="user-left">${name} (${rating})</span>
+    <span class="user-right">${main}${sub ? ' | ' + sub : ''}</span>
+  `;
+
+  li.draggable = true;
+  li.dataset.id = id;
+  li.dataset.name = name;
+  li.dataset.rating = rating;
+  li.dataset.position_main = position_main || '';
+  li.dataset.position_sub  = position_sub  || '';
+  li.dataset.disharmony = disharmony || ''; // ✅ 추가
+
+  li.title = '더블클릭: 참가자에서 제거';
+
+// 여기도 포지션과 상극 데이터를 모두 잃어버리지 않게 꽉 잡아서 전달!
+  li.addEventListener('dragstart', (ev) => {
+    draggingSelId = String(id);
+    ev.dataTransfer.setData('text/plain', JSON.stringify({ 
+      id, name, rating, from:'sel', 
+      position_main, position_sub, 
+      disharmony 
+    }));
+  });
+  li.addEventListener('dragend', () => { draggingSelId = null; });
+  li.addEventListener('dblclick', () => { li.remove(); updateSelState(); });
+
+  selList.appendChild(li);
+  updateSelState();
+}
+
+
+
+// ✅ 최근(가장 마지막) 경기의 10명 참가자를 그대로 참가자 리스트에 채우기
+async function loadLastMembers() {
+  try {
+    const res = await fetch(`${API_BASE}/results?limit=1`, { cache: 'no-store' });
+    const arr = await res.json();
+    if (!Array.isArray(arr) || arr.length === 0) {
+      alert('최근 경기 기록이 없습니다.');
+      return;
+    }
+    const r = arr[0];
+
+    // 1) 결과에서 받은 이름/ID를 최대한 모두 확보
+    const blue = [
+      { id: r.blue1,  name: r.blue1_name  }, { id: r.blue2,  name: r.blue2_name  },
+      { id: r.blue3,  name: r.blue3_name  }, { id: r.blue4,  name: r.blue4_name  },
+      { id: r.blue5,  name: r.blue5_name  },
+    ];
+    const red = [
+      { id: r.red1,   name: r.red1_name   }, { id: r.red2,   name: r.red2_name   },
+      { id: r.red3,   name: r.red3_name   }, { id: r.red4,   name: r.red4_name   },
+      { id: r.red5,   name: r.red5_name   },
+    ];
+    const ten = [...blue, ...red];
+
+    // 2) 참가자 영역 초기화
+    selList.innerHTML = '';
+
+    const byName = new Map(allUsersData.map(u => [String(u.user_id), u]));
+    const byId   = new Map(allUsersData.map(u => [Number(u.id), u]));
+
+    for (const p of ten) {
+      const rawName = p?.name ?? '';
+      const normName = String(rawName || '').trim();
+      const rawId = Number(p?.id);
+
+      let user = null;
+
+      if (normName && byName.has(normName)) {
+        user = byName.get(normName);
+      } else if (Number.isFinite(rawId) && byId.has(rawId)) {
+        user = byId.get(rawId);
+      }
+
+      const id     = user ? Number(user.id)      : (Number.isFinite(rawId) ? rawId : undefined);
+      const name   = user ? String(user.user_id) : (normName || (Number.isFinite(rawId) ? `#${rawId}` : '미확인'));
+      const rating = user ? Number(user.rating)  : 0;
+
+      // 🚨 [수정된 부분] 이전 멤버를 불러올 때도 상극(disharmony) 데이터를 꼭 챙기도록 추가!
+      addParticipant({
+        id,
+        name,
+        rating,
+        position_main: user?.position_main,
+        position_sub: user?.position_sub,
+        disharmony: user?.disharmony
+      });
+    }
+
+    updateSelState();
+  } catch (e) {
+    console.error('loadLastMembers 실패:', e);
+    alert('이전 멤버 불러오기 실패');
+  }
+}
+
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function renderTeams(best, players) {
+  const teamBlue = best.A.map(i => players[i]);
+  const teamRed  = best.B.map(i => players[i]);
+
+  window.currentTeams = { blue: teamBlue, red: teamRed };
+
+  // 5행을 표로 출력
+  const rows = Array.from({ length: 5 }, (_, i) => {
+    const b = teamBlue[i], r = teamRed[i];
+    return `<tr>
+      <td>${b ? `${b.name} (${b.rating})` : ''}</td>
+      <td>${r ? `${r.name} (${r.rating})` : ''}</td>
+    </tr>`;
+  }).join('');
+
+  resultBox.innerHTML = `
+    <div class="result-wrap">
+      <table class="result-table">
+        <thead>
+          <tr>
+            <th class="blue-head">BLUE (합 ${best.sumA})</th>
+            <th class="red-head">RED (합 ${best.sumB})</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr><th colspan="2">점수 차이: ${best.diff}</th></tr>
+        </tfoot>
+      </table>
+      <div class="result-actions">
+        <button id="btnBlueWin" class="btn btn-blue">BLUE 팀 승리 기록</button>
+        <button id="btnRedWin"  class="btn btn-red">RED 팀 승리 기록</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btnBlueWin').addEventListener('click', () => submitResult('blue'));
+  document.getElementById('btnRedWin').addEventListener('click',  () => submitResult('red'));
+}
+
+// ===== 슬롯머신 공개: 도우미 =====
+function playOnce(id, {volume=1, rate=1} = {}) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.pause(); el.currentTime = 0;
+  el.volume = volume; el.playbackRate = rate;
+  el.play().catch(()=>{});
+}
+function loopPlay(id, {volume=0.5, rate=1} = {}) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.volume = volume; el.playbackRate = rate;
+  el.loop = true;
+  el.play().catch(()=>{});
+}
+function loopStop(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.pause(); el.currentTime = 0; el.loop = false;
+}
+// 선택된 10명 이름 풀에서 아무나 보여주기 (굴러가는 느낌)
+function randomFromPool(pool) {
+  if (!pool || pool.length === 0) return '...';
+  return pool[(Math.random() * pool.length) | 0];
+}
+
+// best/players로부터 이름 배열을 뽑아 안전하게 구성
+function resolveTeamNames(best, players) {
+  const byId = new Map(players.map(p => [p.id, p.name || p.user_id || p.userId || String(p.id)]));
+  const norm = (x) => (typeof x === 'object' && x !== null)
+      ? (x.name || x.user_id || x.userId || String(x.id))
+      : (byId.get(x) || String(x));
+  const blueNames = (best.blue || []).map(norm).slice(0,5);
+  const redNames  = (best.red  || []).map(norm).slice(0,5);
+  return { blueNames, redNames };
+}
+
+// 공개 보드 DOM 생성
+function buildSlotBoard({ blueNames, redNames }) {
+  const board = document.createElement('div');
+  board.className = 'slot-board';
+  board.innerHTML = `
+    <div class="slot-col" id="slotBlueCol">
+      <h4>BLUE</h4>
+
+      <div class="slot-sums">
+        <span class="sum-pill sum-blue">BLUE 합: <b id="sumBlue">0</b></span>
+        <span class="sum-pill sum-diff">점수 차이: <b id="sumDiff">0</b></span>
+      </div>
+
+      ${Array.from({length:5}).map((_,i)=>`
+        <div class="slot spin" data-idx="${i}">
+          <div class="slot-name">···</div>
+        </div>`).join('')}
+    </div>
+
+    <div class="slot-col" id="slotRedCol">
+      <h4>RED</h4>
+
+      <div class="slot-sums" style="justify-content:flex-end">
+        <span class="sum-pill sum-red">RED 합: <b id="sumRed">0</b></span>
+      </div>
+
+      ${Array.from({length:5}).map((_,i)=>`
+        <div class="slot spin" data-idx="${i}">
+          <div class="slot-name">···</div>
+        </div>`).join('')}
+    </div>
+  `;
+  return board;
+}
+
+
+// ✅ 1. 위아래 완벽하게 똑같은 양식을 출력하기 위한 통합 도우미 함수 (새로 추가)
+function getSlotHtml(name, rating, posMain, posSub) {
+  const posText = {
+    'T': '🛡️ 탑', 'J': '🌳 정글', 'M': '🧙🏻‍♂️ 미드', 'A': '🏹 원딜', 'S': '🛠️ 서폿',
+    '': '🤖 올라운더', null: '🤖 올라운더', 'NONE': '🚫 없음', undefined: '🤖 올라운더'
+  };
+  const mainStr = posText[posMain] || '🤖 올라운더';
+  const subStr = posSub ? posText[posSub] : '';
+  
+  // 포지션 텍스트는 흰색(#ffffff), 구분선(·, |)은 회색(#777)
+  const posHtml = `<span style="color:#ffffff; font-weight:normal;">${mainStr}</span>` + 
+                  (subStr ? ` <span style="color:#777; margin:0 4px;">|</span> <span style="color:#ffffff; font-weight:normal;">${subStr}</span>` : '');
+  
+  return `${name} <small style="font-weight:400; color:#cbd5e1;">(${rating})</small> <span style="color:#777; margin:0 6px;">·</span> ${posHtml}`;
+}
+
+// ✅ 2. 메인 슬롯머신 공개 시퀀스 (기존 startSlotReveal 덮어쓰기)
+async function startSlotReveal(best, players) {
+  const blue = best.A.map(i => ({
+    id: players[i].id, name: players[i].name, rating: players[i].rating ?? 0,
+    position_main: players[i].position_main ?? '', position_sub: players[i].position_sub ?? ''
+  }));
+
+  const red  = best.B.map(i => ({
+    id: players[i].id, name: players[i].name, rating: players[i].rating ?? 0,
+    position_main: players[i].position_main ?? '', position_sub: players[i].position_sub ?? ''
+  }));
+
+  window.currentTeams = { blue, red };
+  const pool = [...blue.map(x=>x.name), ...red.map(x=>x.name)];
+  const resultBox = document.getElementById('result');
+  const board = buildSlotBoard({ blueNames: blue.map(x=>x.name), redNames: red.map(x=>x.name) });
+  resultBox.prepend(board);
+
+  const elSumB = document.getElementById('sumBlue'); const elSumR = document.getElementById('sumRed'); const elDiff = document.getElementById('sumDiff');
+  let sumB = 0, sumR = 0; const updateDiff = () => elDiff.textContent = Math.abs(sumB - sumR);
+
+  loopPlay('sfxRoll', { volume: 0.45, rate: 1 });
+
+  const spinOne = (el, finalObj, { baseSpin=1100, which='blue' }={}) => new Promise((resolve)=>{
+    el.classList.add('spin');
+    const label = el.querySelector('.slot-name');
+    const int = setInterval(()=>{ label.textContent = randomFromPool(pool); }, 60);
+
+    setTimeout(()=>{
+      playOnce('sfxDecel', { volume: 0.6 });
+      setTimeout(()=>{
+        clearInterval(int);
+        
+        // 💡 통합 도우미 함수를 사용하여 슬롯 안에 직관적인 텍스트 노출!
+        label.innerHTML = getSlotHtml(finalObj.name, finalObj.rating, finalObj.position_main, finalObj.position_sub);
+        
+        el.classList.remove('spin'); el.classList.add('final','highlight');
+        if (which === 'red') el.classList.add('red');
+
+        if (which === 'blue') { sumB += (finalObj.rating||0); elSumB.textContent = sumB; }
+        else                 { sumR += (finalObj.rating||0); elSumR.textContent = sumR; }
+        updateDiff(); playOnce('sfxTick'); setTimeout(()=> el.classList.remove('highlight'), 550); resolve();
+      }, 500);
+    }, baseSpin);
+  });
+
+  const blueCol = document.getElementById('slotBlueCol'); const redCol  = document.getElementById('slotRedCol');
+  for (let i = 0; i < 5; i++) {
+    const blueSlot = blueCol.querySelector(`.slot[data-idx="${i}"]`); await spinOne(blueSlot, blue[i], { baseSpin: 900 + i * 220, which: 'blue' });
+    const redSlot = redCol.querySelector(`.slot[data-idx="${i}"]`); await spinOne(redSlot, red[i], { baseSpin: 900 + i * 220, which: 'red' });
+  }
+  loopStop('sfxRoll'); playOnce('sfxFanfare', { volume: 0.8 });
+  showRecommendedPositions(window.currentTeams);
+}
+
+// ✅ 3. 추천 포지션 표시 (기존 showRecommendedPositions 덮어쓰기)
+function showRecommendedPositions(teams) {
+  if (!teams || !teams.blue || !teams.red) return;
+
+  const order = ['T','J','M','A','S',''];
+  const sortByPos = (arr) => arr.slice().sort((a,b) => order.indexOf(a.position_main ?? '') - order.indexOf(b.position_main ?? ''));
+
+  const blueSorted = sortByPos(teams.blue);
+  const redSorted  = sortByPos(teams.red);
+
+  // 💡 아래 추천 포지션 카드에도 팀 결과 카드와 동일한 중앙 정렬 텍스트 적용!
+  document.getElementById('posResult').innerHTML = `
+    <div class="slot-board">
+      <div class="slot-col">
+        <h4>BLUE 추천 포지션</h4>
+        ${blueSorted.map(p => `
+          <div class="slot">
+            <div class="slot-name">${getSlotHtml(p.name, p.rating, p.position_main, p.position_sub)}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="slot-col">
+        <h4>RED 추천 포지션</h4>
+        ${redSorted.map(p => `
+          <div class="slot red">
+            <div class="slot-name">${getSlotHtml(p.name, p.rating, p.position_main, p.position_sub)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  const posCard = document.getElementById('posCard');
+  posCard.style.display = 'block';
+  posCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+
+
+
+document.getElementById('mixBtn').addEventListener('click', () => {
+  const players = getSelectedPlayers();
+  if (players.length !== 10) return;
+
+  shuffleInPlace(players);
+
+  const best = bestSplit(players);
+
+  // 🚨 [추가] 상극 조건 때문에 5:5 팀을 짤 수 없는 경우
+  if (!best) {
+    alert("⚠️ 너무 많이 얽힌 상극(disharmony) 조건 때문에 5:5 팀을 나눌 수 없습니다!\n참가자를 변경하거나 조건을 완화해주세요.");
+    return;
+  }
+
+  const resultBox = document.getElementById('result');
+  resultBox.innerHTML = ''; 
+
+  if (Math.random() < 0.5) {
+    [best.A, best.B] = [best.B, best.A];
+    [best.sumA, best.sumB] = [best.sumB, best.sumA];
+  }
+  
+  renderRecordBar(best);
+  startSlotReveal(best, players);
+
+  const resultCard = document.getElementById('resultCard');
+  if (resultCard) {
+    resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+
+
+// ✅ [이전 멤버] 버튼 클릭 시 최근 경기 구성 자동 채우기
+document.getElementById('prevMembers').addEventListener('click', loadLastMembers);
+
+// 상단 버튼 바: 디스코드 전송 단일 버튼으로 간소화
+function renderRecordBar(best){
+  const box = document.getElementById('result');
+  const bar = document.createElement('div');
+  bar.className = 'record-bar';
+  bar.innerHTML = `
+    <button class="btn-ghost" id="btnSendDiscord" style="background:#5865F2; color:#fff; border-color:#5865F2;">📢 디스코드로 팀 전송</button>
+    <div class="spacer"></div>
+    <small style="opacity:.75">슬롯 공개에서 합계와 차이를 확인하세요</small>
+  `;
+  box.appendChild(bar);
+
+  document.getElementById('btnSendDiscord').onclick = () => sendTeamToDiscord(best);
+}
+
+// 슬롯 공개 UI의 'BLUE/RED 승리 기록' 버튼이 부르는 얇은 래퍼
+function recordResult(winner) {
+  return submitResult(winner);
+}
+
+/* ===== 결과 업로드 ===== */
+async function submitResult(winner) {
+  if (!window.currentTeams) return;
+  const blue = window.currentTeams.blue;
+  const red  = window.currentTeams.red;
+  if (blue.length !== 5 || red.length !== 5) return;
+
+  const sample = (arr) => arr.slice(0,2).map(p => p.name).join(', ');
+  const confirmMsg =
+    winner === 'blue'
+      ? `BLUE팀 승리로 기록할까요?\n(BLUE팀: ${sample(blue)})`
+      : `RED팀 승리로 기록할까요?\n(RED팀: ${sample(red)})`;
+  if (!confirm(confirmMsg)) return;
+
+  const payload = { blue: blue.map(p => p.id), red: red.map(p => p.id), winner };
+  try {
+    const res = await fetch(`${API_BASE}/results`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+    });
+    if (res.ok) {
+      alert('결과가 기록되었습니다.');
+      selList.innerHTML = ''; updateSelState();
+      document.getElementById('result').innerHTML = '';
+      loadUsers();
+    } else {
+      const data = await res.json().catch(()=> ({}));
+      alert(`기록 실패: ${data.error || res.status}`);
+    }
+  } catch { alert('서버 오류'); }
+}
+
+/* ===== 초기화 ===== */
+document.addEventListener('DOMContentLoaded', () => {
+  loadUsers();
+  updateSelState();
+});
+
+
+function showRecommendedPositions(teams) {
+  if (!teams || !teams.blue || !teams.red) return;
+
+  const posEmoji = {
+    'T': '🛡️ 탑',
+    'J': '🌳 정글',
+    'M': '🧙🏻‍♂️ 미드',
+    'A': '🏹 원딜',
+    'S': '🛠️ 서폿',
+    'NONE': '🚫 없음',
+    '': '🤖 올라운더',
+    null: '🤖 올라운더',
+    undefined: '🤖 올라운더'
+  };
+
+  const order = ['T','J','M','A','S',''];
+  const sortByPos = (arr) =>
+    arr.slice().sort((a,b) =>
+      order.indexOf(a.position_main ?? '') - order.indexOf(b.position_main ?? '')
+    );
+
+  const blueSorted = sortByPos(teams.blue);
+  const redSorted  = sortByPos(teams.red);
+
+  // 슬롯보드 스타일로 표시
+  document.getElementById('posResult').innerHTML = `
+    <div class="slot-board">
+      <div class="slot-col">
+        <h4>BLUE 추천 포지션</h4>
+        ${blueSorted.map(p => `
+          <div class="slot">
+            <div class="slot-name">
+              <span class="user-left">${p.name}<span style="color:#777;"> · </span></span>
+
+              <span class="user-right" style="text-align:right;">
+                ${posEmoji[p.position_main] ?? ''}${p.position_sub ? ' | ' + (posEmoji[p.position_sub] ?? '') : ''}
+              </span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="slot-col">
+        <h4>RED 추천 포지션</h4>
+        ${redSorted.map(p => `
+          <div class="slot red">
+            <div class="slot-name">
+              <span class="user-left">${p.name}<span style="color:#777;"> · </span></span>
+
+              <span class="user-right" style="text-align:right;">
+                ${posEmoji[p.position_main] ?? ''}${p.position_sub ? ' | ' + (posEmoji[p.position_sub] ?? '') : ''}
+              </span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  const posCard = document.getElementById('posCard');
+  posCard.style.display = 'block';
+  posCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 📢 디스코드 채널로 5:5 팀 분배 결과 전송 (NONE -> 없음 처리 완벽 대응)
+// 📢 디스코드 채널로 5:5 팀 분배 결과 전송 (올라운더 vs 부 포지션 없음 완벽 분리)
+async function sendTeamToDiscord(best) {
+  if (!window.currentTeams || !window.currentTeams.blue || !window.currentTeams.red) {
+    alert('먼저 팀을 섞어주세요.');
+    return;
+  }
+
+  const btn = document.getElementById('btnSendDiscord');
+  if (btn) { btn.disabled = true; btn.textContent = '전송 중...'; }
+
+  const posMap = { 'T': '🛡️탑', 'J': '🌳정글', 'M': '🧙🏻‍♂️미드', 'A': '🏹원딜', 'S': '🛠️서폿' };
+  const formatPos = (main, sub) => {
+    const m = posMap[main] || '🤖올라운더';
+    let s = '🤖올라운더';
+    if (sub === 'NONE') {
+      s = '부 포지션 없음';
+    } else if (sub && posMap[sub]) {
+      s = posMap[sub];
+    }
+    return `${m}/${s}`;
+  };
+
+  const payload = {
+    type: 'team',
+    modeTitle: '실력별 팀 분배',
+    sumBlue: best.sumA,
+    sumRed: best.sumB,
+    diff: best.diff,
+    blue: window.currentTeams.blue.map(p => ({
+      name: p.name,
+      rating: p.rating,
+      pos: formatPos(p.position_main, p.position_sub)
+    })),
+    red: window.currentTeams.red.map(p => ({
+      name: p.name,
+      rating: p.rating,
+      pos: formatPos(p.position_main, p.position_sub)
+    }))
+  };
+
+  try {
+    const res = await fetch(`${API_BASE}/discord/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      alert('🎉 디스코드 채널로 팀 명단 카드를 전송했습니다!');
+    } else {
+      alert(`전송 실패: ${data.error || res.status}`);
+    }
+  } catch (e) {
+    alert(`네트워크 오류: ${e.message}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📢 디스코드로 팀 전송'; }
+  }
+}
+
+</script>
+</body>
+  <style>
+  /* ===== j-lol mini nav (prefix: jl-) ===== */
+  .jl-mini-nav{
+    max-width: 1100px; margin: 8px auto 18px;
+    display:flex; flex-wrap:wrap; gap:10px; justify-content:center;
+  }
+  .jl-mini-card{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 12px; border-radius:12px;
+    background:#0f172a; color:#e5e7eb; text-decoration:none;
+    border:1px solid #1f2937; box-shadow:0 2px 10px rgba(0,0,0,.18);
+    font-size:14px; line-height:1; transition:.12s transform,.12s border-color,.12s box-shadow;
+  }
+  .jl-mini-card:hover{ transform:translateY(-1px); border-color:#334155; }
+  .jl-mini-card.is-active{
+    border-color:#60a5fa; box-shadow:0 0 0 2px rgba(96,165,250,.25) inset, 0 2px 10px rgba(0,0,0,.2);
+  }
+  .jl-mini-ico{ font-size:16px; opacity:.95 }
+  .jl-mini-badge{ font-size:11px; padding:2px 6px; border-radius:999px; margin-left:4px; background:#1f2937; color:#cbd5e1; }
+  /* 밝은 배경 페이지 호환 (선택) */
+  @media (prefers-color-scheme: light){
+    .jl-mini-card{ background:#ffffff; color:#0f172a; border-color:#e5e7eb; }
+    .jl-mini-card.is-active{ border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.2) inset; }
+    .jl-mini-badge{ background:#eef2ff; color:#1e40af; }
+  }
+
+
+
+    /* Front.html 톤 매칭 */
+    body { font-family: Arial, sans-serif; background:#f4f4f9; color:#333; margin:0; padding:20px; text-align:center; }
+    h1 { color:#0056b3; margin:0 0 8px; }
+    .sub { color:#666; font-size:12px; margin:6px 0 14px; }
+    a.nav { display:inline-block; margin:4px 6px; padding:10px 16px; background:#28a745; color:#fff; text-decoration:none; border-radius:5px; }
+    a.nav:hover { background:#218838; }
+
+    .card { background:#fff; box-shadow:0 2px 5px rgba(0,0,0,.1); border-radius:8px; padding:18px; max-width:1000px; margin:18px auto; text-align:left; }
+    .card h3 { margin:0 0 12px; color:#0056b3; text-align:center; }
+    .row { display:flex; gap:16px; align-items:flex-start; justify-content:center; flex-wrap:wrap; }
+    .col { flex:1 1 420px; max-width:480px; }
+
+    .panel { min-height:320px; border:1px solid #ddd; padding:8px; border-radius:6px; background:#fff; }
+    .drop  { min-height:320px; border:2px dashed #bbb; padding:8px; border-radius:6px; background:#fff; transition: background .15s ease; }
+    ul.list { list-style:none; margin:0; padding:0; }
+    ul.list li { padding:6px 8px; border-bottom:1px solid #eee; user-select:none; cursor:grab; }
+
+    .btn { background:#007bff; color:#fff; border:none; padding:10px 16px; border-radius:5px; cursor:pointer; font-size:16px; }
+    .btn:hover { background:#0056b3; }
+    .btn-green { background:#28a745; } .btn-green:hover{ background:#218838; }
+    .btn-ghost { background:#fff; color:#007bff; border:1px solid #007bff; } .btn-ghost:hover{ background:#eef5ff; }
+
+    .teams { display:flex; gap:16px; }
+    .teams > div { flex:1; }
+    .blue { color:#2563eb; font-weight:bold; }
+    .red  { color:#dc2626; font-weight:bold; }
+
+    label { display:inline-block; margin-right:8px; }
+    input, select { padding:8px; border:1px solid #ccc; border-radius:5px; }
+    .form-row { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+    .msg { margin-top:8px; color:#444; text-align:center; }
+
+    #allList li { cursor: pointer; }
+#allList li:hover { background:#f8fafc; }
+
+
+
+/* ===== 결과 테이블 (굵고 크게 + 칸막이) ===== */
+.result-wrap { margin-top: 6px; }
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 18px;             /* 글자 크게 */
+  border: 2px solid #d0d7de;   /* 바깥 테두리 */
+}
+.result-table th,
+.result-table td {
+  border: 1px solid #e2e8f0;   /* 칸막이 */
+  padding: 12px 14px;
+  text-align: center;
+  vertical-align: middle;
+  background:#fff;
+  font-weight: 600;             /* 기본 조금 굵게 */
+}
+.result-table thead th {
+  font-size: 20px;              /* 머리셀 더 크게 */
+  background: #f1f5f9;          /* 옅은 배경 */
+}
+.result-table .blue-head { color:#1d4ed8; font-weight: 800; }
+.result-table .red-head  { color:#dc2626; font-weight: 800; }
+.result-table tfoot th {
+  background:#f8fafc;
+  font-weight: 700;
+}
+.result-actions {
+  display:flex; gap:12px; justify-content:center; margin-top:14px;
+}
+
+
+.btn-blue {
+  background: #2563eb; /* Tailwind blue-600 */
+  color: #fff;
+}
+.btn-blue:hover { background: #1d4ed8; }
+
+.btn-red {
+  background: #dc2626; /* Tailwind red-600 */
+  color: #fff;
+}
+.btn-red:hover { background: #b91c1c; }
+
+  /* ==== 슬롯머신 공개 보드 ==== */
+  .slot-board{
+    display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:12px 0 10px;
+  }
+  .slot-col{
+    background:#0f172a; color:#e5e7eb; border:1px solid #1f2937; border-radius:12px; padding:10px 12px;
+  }
+  .slot-col h4{ margin:0 0 8px; font-size:15px; color:#cbd5e1 }
+  .slot{
+    height:42px; display:flex; align-items:center; justify-content:center;
+    background:#0b1220; border:1px solid #243244; border-radius:10px;
+    margin:8px 0; position:relative; overflow:hidden;
+  }
+/* 슬롯 내부 텍스트 (예전 클래식 가운데 정렬로 복구) */
+/* 슬롯 내부 텍스트 (예전 클래식 가운데 정렬로 복구) */
+  .slot-name {
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: .2px;
+    color: #e2e8f0;
+    white-space: nowrap;
+    width: 100%;
+    text-align: center;
+  }
+.slot-pos-badge {
+    font-size: 13px;
+    background: rgba(255,255,255,0.1);
+    padding: 2px 5px;
+    border-radius: 4px;
+    color: #94a3b8;
+    font-weight: 400;
+  }
+.slot-name .user-left {
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .slot-name .user-right {
+    text-align: right;
+    font-size: 13px; /* 포지션 텍스트는 약간 슬림하게 */
+    font-weight: 400;
+    opacity: 0.9;
+    white-space: nowrap;
+  }
+
+  .slot.spin .slot-name{ opacity:.8 }
+  .slot.final{ border-color:#3b82f6 }
+  .slot.final.red{ border-color:#ef4444 }
+  .slot.highlight::after{
+    content:""; position:absolute; inset:0; border-radius:10px;
+    box-shadow:0 0 0 2px rgba(99,102,241,.45) inset; animation: pulseGlow .6s ease 2;
+  }
+  @keyframes pulseGlow{
+    0%{ box-shadow:0 0 0 0 rgba(99,102,241,.0) inset }
+    50%{ box-shadow:0 0 0 3px rgba(99,102,241,.5) inset }
+    100%{ box-shadow:0 0 0 0 rgba(99,102,241,.0) inset }
+  }
+ /* 합계/차이 배지 */
+  .slot-sums {
+    display:flex; justify-content:space-between; align-items:center;
+    gap:10px; margin:4px 0 10px;
+  }
+  .sum-pill { padding:6px 10px; border-radius:999px; font-weight:700; font-size:13px }
+  .sum-blue { background:#0b3b7a; color:#dbeafe; }
+  .sum-red  { background:#6a0b0b; color:#fee2e2; }
+  .sum-diff { background:#334155; color:#e2e8f0; }
+
+  /* 승리 기록만 남기는 얇은 바 */
+  .record-bar{
+    margin:12px 0 2px; padding:10px 12px; border-radius:12px;
+    background:#0b1220; border:1px solid #243244; display:flex; gap:8px; align-items:center;
+  }
+  .record-bar .spacer { flex:1 }
+  .btn-ghost{
+    padding:8px 12px; border-radius:10px; border:1px solid #334155; background:#0f172a;
+    color:#e2e8f0; cursor:pointer; font-weight:700;
+  }
+  .btn-ghost.blue { border-color:#2563eb; color:#dbeafe }
+  .btn-ghost.red  { border-color:#ef4444; color:#fee2e2 }
+
+.user-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 8px;
+  border-bottom: 1px solid #eee;
+  font-size: 15px;
+}
+
+.user-left {
+  flex: 1;
+  text-align: left;
+}
+
+.user-right {
+  min-width: 150px;
+  text-align: right;
+  color: #444;
+  white-space: nowrap;
+}
+/* 추천 포지션 - BLUE / RED 테두리 스타일 */
+.slot-col .slot {
+  border: 2px solid #1e3a8a; /* 기본 파란 테두리 */
+  border-radius: 10px;
+  background-color: #0f172a;
+  margin-bottom: 4px;         /* 슬롯 간격도 살짝 줄임 */
+  padding: 1px 12px;          /* ← 위아래 3px, 좌우 10px으로 슬림하게 */
+  line-height: 1.3;           /* ← 텍스트 간격도 살짝 조정 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+
+.slot-col .slot.red {
+  border-color: #b91c1c; /* RED 테두리 */
+}
+
+.slot-col .slot:hover {
+  background-color: rgba(255,255,255,0.05);
+}
+
+  </style>
+</html>

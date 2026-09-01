@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>젤리🐛의 내전 도우미 ·수동 팀 구성 · 결과 업로드</title>
+      <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐛</text></svg>">
+
+</head>
+<body>
+
+  <h1 style="color:#0056b3; margin:0 0 8px; text-align:center;">수동 팀 구성 · 결과 업로드</h1>
+  <div class="sub">전체 유저에서 원하는 10명을 선택해 <b>BLUE / RED</b> 팀에 배치한 뒤, 승리 기록을 저장하세요.</div>
+<div id="nav-placeholder"></div>
+<script>
+fetch("nav.html")
+  .then(res => res.text())
+  .then(html => document.getElementById("nav-placeholder").innerHTML = html);
+</script>
+
+  <div class="card">
+    
+    <div style="text-align:center; margin-bottom: 20px;">
+      <button id="btnLoadLast" class="btn" style="background:#64748b; font-size:14px; padding: 8px 16px;">
+        ↺ 이전 게임 멤버 그대로 불러오기
+      </button>
+    </div>
+
+    <div class="row">
+      <div class="col">
+        <h3 style="text-align:center;">전체 유저 (실력점수)</h3>
+        <div id="allPanel" class="panel" aria-label="전체 유저">
+          <ul id="allList" class="list"></ul>
+          <div class="sub">💡 선수를 이 영역으로 드롭하거나 <b>더블클릭</b>하면 팀에서 제거되어 전체 유저로 되돌아옵니다.</div>
+        </div>
+      </div>
+
+      <div class="col">
+        <h3 style="text-align:center; color:#2563eb;">BLUE 팀 (<span id="blueCnt">0</span>/5)</h3>
+        <div id="blueDrop" class="drop" aria-label="BLUE 팀 드롭">
+          <ul id="blueList" class="list team"></ul>
+        </div>
+        <div class="sub" style="text-align:center;">💡 <b>클릭</b>으로 추가하면 먼저 BLUE부터 채워집니다.</div>
+      </div>
+
+      <div class="col">
+        <h3 style="text-align:center; color:#dc2626;">RED 팀 (<span id="redCnt">0</span>/5)</h3>
+        <div id="redDrop" class="drop" aria-label="RED 팀 드롭">
+          <ul id="redList" class="list team"></ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<div class="card" style="max-width:900px;">
+    <h3 style="text-align:center;">결과 업로드</h3>
+    
+    <div style="display:flex; justify-content:center; align-items:center; gap:8px; margin-bottom:15px;">
+      <span style="font-weight:bold; color:#555;">피어리스 모드</span>
+      <label class="switch">
+        <input type="checkbox" id="fearlessToggle">
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div style="display:flex; gap:12px; justify-content:center;">
+      <button id="btnBlueWin" class="btn btn-blue" disabled>BLUE 팀 승리 기록</button>
+      <button id="btnRedWin"  class="btn btn-red"  disabled>RED 팀 승리 기록</button>
+    </div>
+    <div id="msg" class="msg" style="text-align:center; margin-top:10px;"></div>
+  </div>
+<script>
+
+  // 현재 페이지 자동 하이라이트
+  (function(){
+    const current = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    document.querySelectorAll('.jl-mini-nav .jl-mini-card').forEach(a=>{
+      const href = (a.getAttribute('href')||'').toLowerCase();
+      if (href && current.endsWith(href)) a.classList.add('is-active');
+    });
+  })();
+
+
+/* ===== API 기준 경로 ===== */
+const API_BASE = (window.API_BASE) || 'https://wispy-recipe-b8f5.3alzak.workers.dev/api';
+
+/* ===== DOM ===== */
+const allList  = document.getElementById('allList');
+const blueList = document.getElementById('blueList');
+const redList  = document.getElementById('redList');
+const blueCnt  = document.getElementById('blueCnt');
+const redCnt   = document.getElementById('redCnt');
+const msgBox   = document.getElementById('msg');
+
+/* ===== 전역 변수: 유저 검색용 캐시 ===== */
+let allUsersCache = [];
+
+/* ===== 상태 업데이트 ===== */
+function updateState(){
+  blueCnt.textContent = blueList.children.length;
+  redCnt.textContent  = redList.children.length;
+  const ready = (blueList.children.length === 5 && redList.children.length === 5);
+  document.getElementById('btnBlueWin').disabled = !ready;
+  document.getElementById('btnRedWin').disabled  = !ready;
+}
+
+/* ===== 전체 유저 아이템 생성 ===== */
+function makeAllItem(u){
+  const li = document.createElement('li');
+  li.textContent = `${u.user_id} (${u.rating})`;
+  li.draggable = true;
+  li.dataset.id = u.id;
+  li.dataset.name = u.user_id;
+  li.dataset.rating = u.rating;
+
+  // 클릭: BLUE가 먼저, 다 차면 RED
+  li.addEventListener('click', ()=>{
+    const data = { id:u.id, name:u.user_id, rating:u.rating, from:'all' };
+    if (blueList.children.length < 5) {
+      addToTeam('blue', data);
+    } else if (redList.children.length < 5){
+      addToTeam('red', data);
+    }
+  });
+
+  li.addEventListener('dragstart', (e)=>{
+    e.dataTransfer.setData('text/plain', JSON.stringify({ id:u.id, name:u.user_id, rating:u.rating, from:'all' }));
+  });
+
+  return li;
+}
+
+/* ===== 팀 아이템 생성 ===== */
+function makeTeamItem(data){
+  const li = document.createElement('li');
+  li.textContent = `${data.name} (${data.rating})`;
+  li.draggable = true;
+  li.dataset.id = data.id;
+  li.dataset.name = data.name;
+  li.dataset.rating = data.rating;
+  li.title = '더블클릭: 팀에서 제거(전체 유저로 복귀)';
+
+  // 팀에서 드래그 → 다른 영역으로 이동 가능
+  li.addEventListener('dragstart', (e)=>{
+    const from = li.parentElement === blueList ? 'blue' : 'red';
+    e.dataTransfer.setData('text/plain', JSON.stringify({
+      id:+li.dataset.id, name:li.dataset.name, rating:+li.dataset.rating, from
+    }));
+  });
+
+  // 더블클릭: 전체 유저로 반환
+  li.addEventListener('dblclick', ()=>{
+    li.remove();
+    if (![...allList.children].some(x => x.dataset.id === String(data.id))) {
+      allList.appendChild(makeAllItem({ id:data.id, user_id:data.name, rating:data.rating }));
+    }
+    updateState();
+  });
+
+  return li;
+}
+
+/* ===== 팀에 추가(클릭/드롭 공용) ===== */
+function addToTeam(side, data){
+  const target = side === 'blue' ? blueList : redList;
+  if (target.children.length >= 5) return;
+
+  // 이미 해당 팀에 있으면 무시
+  if ([...target.children].some(x => x.dataset.id === String(data.id))) return;
+
+  // 반대 팀에 있다면 제거
+  const other = (side === 'blue') ? redList : blueList;
+  const otherLi = [...other.children].find(x => x.dataset.id === String(data.id));
+  if (otherLi) otherLi.remove();
+
+  // 전체 유저에서 제거
+  const inAll = [...allList.children].find(x => x.dataset.id === String(data.id));
+  if (inAll) inAll.remove();
+
+  target.appendChild(makeTeamItem(data));
+  updateState();
+}
+
+/* ===== 드래그 앤 드롭 세팅 ===== */
+function setupDrop(zone, side){
+  zone.addEventListener('dragover', (e)=>{ e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', ()=> zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', (e)=>{
+    e.preventDefault(); zone.classList.remove('drag-over');
+    try{
+      const d = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+      if (!d.id) return;
+      addToTeam(side, d);
+    }catch{}
+  });
+}
+setupDrop(document.getElementById('blueDrop'), 'blue');
+setupDrop(document.getElementById('redDrop'),  'red');
+
+// 전체 유저 패널로 드롭 시 팀에서 제거하여 복귀
+const allPanel = document.getElementById('allPanel');
+allPanel.addEventListener('dragover', (e)=> e.preventDefault());
+allPanel.addEventListener('drop', (e)=>{
+  e.preventDefault();
+  try{
+    const d = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+    if (!d.id) return;
+    const rmBlue = [...blueList.children].find(x => x.dataset.id === String(d.id));
+    const rmRed  = [...redList.children].find(x => x.dataset.id === String(d.id));
+    if (rmBlue) rmBlue.remove();
+    if (rmRed) rmRed.remove();
+    if (![...allList.children].some(x => x.dataset.id === String(d.id))) {
+      allList.appendChild(makeAllItem({ id:d.id, user_id:d.name, rating:d.rating }));
+    }
+    updateState();
+  }catch{}
+});
+
+/* ===== 전체 유저 로드 ===== */
+async function loadUsers(){
+  allList.innerHTML = '<li>불러오는 중...</li>';
+  try{
+    const res = await fetch(`${API_BASE}/users`);
+    const users = await res.json();
+    
+    // [수정] 나중에 불러오기 기능을 위해 전역 변수에 저장
+    allUsersCache = users || [];
+
+    allList.innerHTML = '';
+    if (!Array.isArray(users) || users.length === 0){
+      allList.innerHTML = '<li>등록된 유저가 없습니다</li>'; return;
+    }
+    users.forEach(u => allList.appendChild(makeAllItem(u)));
+  }catch(e){
+    console.error(e);
+    allList.innerHTML = '<li>유저 목록을 불러오지 못했습니다</li>';
+  }
+}
+
+/* ===== [추가] 이전 멤버 불러오기 기능 ===== */
+document.getElementById('btnLoadLast').addEventListener('click', async () => {
+  if (allUsersCache.length === 0) {
+    alert('유저 목록을 먼저 불러와야 합니다.');
+    return;
+  }
+
+  const btn = document.getElementById('btnLoadLast');
+  btn.textContent = '불러오는 중...';
+  btn.disabled = true;
+
+  try {
+    // 1. 최근 게임 1개 가져오기
+    const res = await fetch(`${API_BASE}/results?limit=1`);
+    const data = await res.json();
+    const lastGame = Array.isArray(data) ? data[0] : null;
+
+    if (!lastGame) {
+      alert('기록된 게임이 없습니다.');
+      return;
+    }
+
+    // 2. 현재 배치 초기화 (전체 유저 패널로 복귀)
+    // 화면상의 리스트만 싹 비우고, allUsersCache를 이용해 전체 목록을 다시 그림
+    blueList.innerHTML = '';
+    redList.innerHTML = '';
+    allList.innerHTML = '';
+    allUsersCache.forEach(u => allList.appendChild(makeAllItem(u)));
+    updateState();
+
+    // 3. BLUE 팀 채우기
+    const blueIds = [lastGame.blue1, lastGame.blue2, lastGame.blue3, lastGame.blue4, lastGame.blue5];
+    blueIds.forEach(id => {
+      const user = allUsersCache.find(u => u.id === id);
+      if (user) {
+        addToTeam('blue', { id: user.id, name: user.user_id, rating: user.rating });
+      }
+    });
+
+    // 4. RED 팀 채우기
+    const redIds = [lastGame.red1, lastGame.red2, lastGame.red3, lastGame.red4, lastGame.red5];
+    redIds.forEach(id => {
+      const user = allUsersCache.find(u => u.id === id);
+      if (user) {
+        addToTeam('red', { id: user.id, name: user.user_id, rating: user.rating });
+      }
+    });
+
+    // 5. 알림
+    btn.textContent = '불러오기 완료!';
+    setTimeout(() => {
+      btn.textContent = '↺ 이전 게임 멤버 그대로 불러오기';
+      btn.disabled = false;
+    }, 1500);
+
+  } catch (e) {
+    console.error(e);
+    alert('불러오기 실패: ' + e.message);
+    btn.textContent = '↺ 이전 게임 멤버 그대로 불러오기';
+    btn.disabled = false;
+  }
+});
+
+
+
+
+/* ===== 결과 업로드 (알림창 추가됨) ===== */
+async function submitResult(winner){
+  const blue = [...blueList.children].map(li => +li.dataset.id);
+  const red  = [...redList.children].map(li => +li.dataset.id);
+
+  if (blue.length !== 5 || red.length !== 5) {
+    msgBox.textContent = '양 팀이 5명씩 구성되어야 합니다.'; return;
+  }
+
+  // 피어리스 토글 값 읽기
+  const toggleEl = document.getElementById('fearlessToggle');
+  const isFearless = (toggleEl && toggleEl.checked) ? 1 : 0;
+
+  const bnames = [...blueList.children].map(li => li.dataset.name).slice(0,2).join(', ');
+  const rnames = [...redList.children].map(li => li.dataset.name).slice(0,2).join(', ');
+  
+  // 확인 창
+  const ok = confirm(
+    winner === 'blue'
+      ? `BLUE팀 승리로 기록할까요?\n(예: ${bnames})\n\n★ 피어리스 모드: ${isFearless ? 'ON' : 'OFF'}`
+      : `RED팀 승리로 기록할까요?\n(예: ${rnames})\n\n★ 피어리스 모드: ${isFearless ? 'ON' : 'OFF'}`
+  );
+  if (!ok) return;
+
+  msgBox.textContent = '기록 중...';
+  try{
+    const res = await fetch(`${API_BASE}/results`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ blue, red, winner, fearless: isFearless })
+    });
+    const data = await res.json().catch(()=> ({}));
+    
+    if (res.ok){
+      const winTeamName = winner.toUpperCase(); // 'BLUE' or 'RED'
+      
+      // [추가] 성공 알림창 띄우기
+      alert(`${winTeamName}팀 승리가 기록되었습니다!`);
+
+      msgBox.textContent = `${winTeamName}팀 승리 기록 완료!`;
+      blueList.innerHTML = '';
+      redList.innerHTML  = '';
+      
+      // 기록 후 토글 끄기 (선택사항)
+      if(toggleEl) toggleEl.checked = false; 
+      
+      updateState();
+      loadUsers();
+    } else {
+      msgBox.textContent = `기록 실패: ${data.error || res.status}`;
+      alert(`기록 실패: ${data.error || res.status}`);
+    }
+  }catch(e){
+    msgBox.textContent = '서버 오류';
+    alert('서버 오류가 발생했습니다.');
+  }
+}
+
+
+
+
+document.getElementById('btnBlueWin').addEventListener('click', ()=> submitResult('blue'));
+document.getElementById('btnRedWin').addEventListener('click',  ()=> submitResult('red'));
+
+/* ===== 초기화 ===== */
+document.addEventListener('DOMContentLoaded', ()=>{
+  loadUsers();
+  updateState();
+});
+</script>
+</body>
+<style>
+  /* ===== j-lol mini nav (prefix: jl-) ===== */
+  .jl-mini-nav{
+    max-width: 1100px; margin: 8px auto 18px;
+    display:flex; flex-wrap:wrap; gap:10px; justify-content:center;
+  }
+  .jl-mini-card{
+    display:inline-flex; align-items:center; gap:8px;
+    padding:10px 12px; border-radius:12px;
+    background:#0f172a; color:#e5e7eb; text-decoration:none;
+    border:1px solid #1f2937; box-shadow:0 2px 10px rgba(0,0,0,.18);
+    font-size:14px; line-height:1; transition:.12s transform,.12s border-color,.12s box-shadow;
+  }
+  .jl-mini-card:hover{ transform:translateY(-1px); border-color:#334155; }
+  .jl-mini-card.is-active{
+    border-color:#60a5fa; box-shadow:0 0 0 2px rgba(96,165,250,.25) inset, 0 2px 10px rgba(0,0,0,.2);
+  }
+  .jl-mini-ico{ font-size:16px; opacity:.95 }
+  .jl-mini-badge{ font-size:11px; padding:2px 6px; border-radius:999px; margin-left:4px; background:#1f2937; color:#cbd5e1; }
+  /* 밝은 배경 페이지 호환 (선택) */
+  @media (prefers-color-scheme: light){
+    .jl-mini-card{ background:#ffffff; color:#0f172a; border-color:#e5e7eb; }
+    .jl-mini-card.is-active{ border-color:#3b82f6; box-shadow:0 0 0 2px rgba(59,130,246,.2) inset; }
+    .jl-mini-badge{ background:#eef2ff; color:#1e40af; }
+  }
+
+
+  body { font-family: Arial, sans-serif; background:#f4f4f9; color:#333; margin:0; padding:20px; }
+  .sub { color:#666; font-size:12px; margin:6px 0 14px; text-align:center; }
+  a.nav { display:inline-block; margin:4px 6px; padding:10px 16px; background:#28a745; color:#fff; text-decoration:none; border-radius:5px; }
+  a.nav:hover { background:#218838; }
+
+  .card { background:#fff; box-shadow:0 2px 5px rgba(0,0,0,.1); border-radius:8px; padding:18px; max-width:1200px; margin:18px auto; }
+  .row { display:flex; gap:16px; align-items:flex-start; justify-content:center; flex-wrap:wrap; }
+  .col { flex:1 1 360px; max-width:420px; }
+
+  .panel { min-height:340px; border:1px solid #ddd; padding:8px; border-radius:6px; background:#fff; }
+  .drop  { min-height:340px; border:2px dashed #bbb; padding:8px; border-radius:6px; background:#fff; transition: background .15s ease; }
+  .drop.drag-over { background:#eef6ff; }
+  ul.list { list-style:none; margin:0; padding:0; }
+  ul.list li { padding:8px 10px; border-bottom:1px solid #eee; user-select:none; cursor:grab; }
+
+  .btn { background:#007bff; color:#fff; border:none; padding:10px 16px; border-radius:5px; cursor:pointer; font-size:16px; }
+  .btn:hover { background:#0056b3; }
+  .btn-blue { background:#2563eb; } .btn-blue:hover { background:#1d4ed8; }
+  .btn-red  { background:#dc2626; } .btn-red:hover  { background:#b91c1c; }
+  .msg { color:#333; }
+  /* [추가] 토글 스위치 스타일 */
+  .switch { position: relative; display: inline-block; width: 40px; height: 22px; vertical-align: middle; }
+  .switch input { display:none; }
+  .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .3s; border-radius: 22px; }
+  .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+  input:checked + .slider { background-color: #3b82f6; }
+  input:checked + .slider:before { transform: translateX(18px); }
+</style>
+</html>
