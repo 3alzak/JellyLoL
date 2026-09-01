@@ -3,7 +3,7 @@ export default {
     const url = new URL(request.url);
 
 // 🔐 하드코딩 관리자 PIN 
-const ADMIN_PIN = '4333';
+const ADMIN_PIN = '4433';
 // 📢 디스코드 웹훅 URL (본인의 디스코드 채널 웹훅 URL을 입력하세요)
 const DISCORD_WEBHOOK_URL = env.DISCORD_WEBHOOK_URL || 'https://discord.com/api/webhooks/1542454716997443594/pFHCm6WwhzDlNba7vPV9tStgiGSpqeG3AYXyc-mtJ5ReHwstVUREPExYJS_zu3qPSX7_';
 
