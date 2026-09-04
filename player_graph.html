@@ -255,21 +255,22 @@
 
 
   // 2. 실력점수 순위에 따른 티어 산정 (꼴찌는 무조건 아이언 보장)
+  // 2. 실력점수 순위에 따른 티어 산정 (1,1,1,2,2,3,3,3,3명 & 꼴찌 무조건 아이언)
   function getTierData(rankIndex, totalUsers) {
-    // 💡 꼴찌 방어권: 유저 수가 몇 명이든 최하위는 무조건 아이언 박제
-    if (totalUsers && rankIndex === totalUsers - 1) {
+    // 💡 최하위(꼴찌)는 앞선 순위/티어와 무관하게 무조건 아이언 강제 박제
+    if (totalUsers > 1 && rankIndex === totalUsers - 1) {
       return { name: '아이언', cls: 't-iron' };
     }
 
-    if (rankIndex === 0) return { name: '챌린저', cls: 't-challenger' };       // 1명 (1등)
-    if (rankIndex === 1) return { name: '그랜드마스터', cls: 't-grandmaster' };   // 1명 (2등)
-    if (rankIndex <= 2) return { name: '마스터', cls: 't-master' };            // 1명 (3등)
-    if (rankIndex <= 4) return { name: '다이아몬드', cls: 't-diamond' };        // 2명 (4~5등)
-    if (rankIndex <= 6) return { name: '에메랄드', cls: 't-emerald' };         // 2명 (6~7등)
-    if (rankIndex <= 9) return { name: '플래티넘', cls: 't-platinum' };        // 3명 (8~10등)
-    if (rankIndex <= 12) return { name: '골드', cls: 't-gold' };              // 3명 (11~13등)
-    if (rankIndex <= 15) return { name: '실버', cls: 't-silver' };            // 3명 (14~16등)
-    if (rankIndex <= 18) return { name: '브론즈', cls: 't-bronze' };          // 3명 (17~19등)
+    if (rankIndex === 0) return { name: '챌린저', cls: 't-challenger' };       // 1등 (1명)
+    if (rankIndex === 1) return { name: '그랜드마스터', cls: 't-grandmaster' };   // 2등 (1명)
+    if (rankIndex <= 2) return { name: '마스터', cls: 't-master' };            // 3등 (1명)
+    if (rankIndex <= 4) return { name: '다이아몬드', cls: 't-diamond' };        // 4~5등 (2명)
+    if (rankIndex <= 6) return { name: '에메랄드', cls: 't-emerald' };         // 6~7등 (2명)
+    if (rankIndex <= 9) return { name: '플래티넘', cls: 't-platinum' };        // 8~10등 (3명)
+    if (rankIndex <= 14) return { name: '골드', cls: 't-gold' };              // 11~13등 (3명)
+    if (rankIndex <= 18) return { name: '실버', cls: 't-silver' };            // 14~16등 (3명)
+    if (rankIndex <= 55) return { name: '브론즈', cls: 't-bronze' };          // 17~19등 (3명)
     return { name: '아이언', cls: 't-iron' };                                 // 20등 이하
   }
 
@@ -378,10 +379,10 @@
 
 
   // 5. 메인 데이터 로드 및 분석
+  // 5. 메인 데이터 로드 및 분석 (1순위: 점수, 2순위: 승률, 동점: 원래 순서)
   async function loadAndProcess() {
     await initDDragon();
 
-    // 💡 players.html과 100% 동일한 점수를 가져오기 위해 season=2026-2 파라미터 적용
     const [uRes, rRes] = await Promise.all([
       fetch(`${API_BASE}/users?season=2026-2&show_all=true`),
       fetch(`${API_BASE}/results?limit=500&season=all`)
@@ -398,30 +399,28 @@
       } catch(e) { return false; }
     }).sort((a, b) => b.id - a.id);
 
-    // 활성 유저만 추출 및 실력점수 기준 내림차순 정렬 (티어 배정)
+    // 활성 유저만 추출
     const activeUsers = (Array.isArray(users) ? users : [])
-      .filter(u => u.active === 1 || u.active === undefined)
-      .sort((a, b) => Number(b.rating) - Number(a.rating));
+      .filter(u => u.active === 1 || u.active === undefined);
 
-    // 유저별 스탯 딕셔너리 초기화 (DB의 u.rating 그대로 사용)
-    // 유저별 스탯 딕셔너리 초기화 (DB의 u.rating 그대로 사용)
+    // 유저별 스탯 초기화
     const statsMap = {};
-    activeUsers.forEach((u, index) => {
+    activeUsers.forEach(u => {
       statsMap[u.id] = {
         id: u.id,
         name: u.user_id,
-        rating: Number(u.rating ?? 0), // DB 실제 실력점수
-        tierInfo: getTierData(index, activeUsers.length), // 👈 activeUsers.length 전달
+        rating: Number(u.rating ?? 0),
+        tierInfo: null,
         games: 0, wins: 0, losses: 0,
         kills: 0, deaths: 0, assists: 0, 
         damage: 0, damage_taken: 0, cs: 0, vision: 0, durationMin: 0,
-        history: [], // W, L
-        champs: {},  // { champName: { games, wins, k, d, a } }
-        items: {}    // { itemId: count }
+        history: [],
+        champs: {},
+        items: {}
       };
     });
 
-    // 전적 집계 (오직 match_detail이 존재하는 경기만 인게임 지표에 반영)
+    // 인게임 지표 집계
     validGames.forEach(g => {
       const d = typeof g.match_detail === 'string' ? JSON.parse(g.match_detail) : g.match_detail;
       const gameMin = (d.duration_sec || 0) / 60;
@@ -445,7 +444,6 @@
         s.vision += (p.vision_score || 0);
         s.durationMin += gameMin;
 
-        // 챔피언 집계
         const cId = champKeyToName[String(p.champion_id)] || 'Aatrox';
         if (!s.champs[cId]) s.champs[cId] = { games: 0, wins: 0, k: 0, d: 0, a: 0 };
         s.champs[cId].games++;
@@ -454,7 +452,6 @@
         s.champs[cId].d += (p.deaths || 0); 
         s.champs[cId].a += (p.assists || 0);
 
-        // 아이템 집계
         const rawItems = p.items || [p.item0, p.item1, p.item2, p.item3, p.item4, p.item5, p.item6];
         if (Array.isArray(rawItems)) {
           rawItems.forEach(itemId => {
@@ -465,8 +462,23 @@
       });
     });
 
-    // 1게임 이상 플레이한 유저만 점수순으로 출력
-    const finalUsers = Object.values(statsMap).filter(s => s.games > 0).sort((a,b) => b.rating - a.rating);
+    // 1게임 이상 유저만 추출
+    const finalUsers = Object.values(statsMap).filter(s => s.games > 0);
+
+    // 🎯 1순위: 점수 / 2순위: 승률 / 동점 시: 원래 나온 순서(0)
+    finalUsers.sort((a, b) => {
+      if (b.rating !== a.rating) return b.rating - a.rating;
+      const winRateA = a.games > 0 ? (a.wins / a.games) : 0;
+      const winRateB = b.games > 0 ? (b.wins / b.games) : 0;
+      if (winRateB !== winRateA) return winRateB - winRateA;
+      return 0;
+    });
+
+    // 최종 확정 순위대로 티어 배정
+    finalUsers.forEach((s, rankIndex) => {
+      s.tierInfo = getTierData(rankIndex, finalUsers.length);
+    });
+
     renderCards(finalUsers);
   }
 
