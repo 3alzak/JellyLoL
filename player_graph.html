@@ -256,6 +256,7 @@
 
   // 2. 실력점수 순위에 따른 티어 산정 (꼴찌는 무조건 아이언 보장)
   // 2. 실력점수 순위에 따른 티어 산정 (1,1,1,2,2,3,3,3,3명 & 꼴찌 무조건 아이언)
+  // 2. 실력점수 순위에 따른 티어 산정 (1,1,1,2,2,3,3,3,3명 & 꼴찌 무조건 아이언)
   function getTierData(rankIndex, totalUsers) {
     // 💡 최하위(꼴찌)는 앞선 순위/티어와 무관하게 무조건 아이언 강제 박제
     if (totalUsers > 1 && rankIndex === totalUsers - 1) {
@@ -268,10 +269,10 @@
     if (rankIndex <= 4) return { name: '다이아몬드', cls: 't-diamond' };        // 4~5등 (2명)
     if (rankIndex <= 6) return { name: '에메랄드', cls: 't-emerald' };         // 6~7등 (2명)
     if (rankIndex <= 9) return { name: '플래티넘', cls: 't-platinum' };        // 8~10등 (3명)
-    if (rankIndex <= 14) return { name: '골드', cls: 't-gold' };              // 11~13등 (3명)
-    if (rankIndex <= 18) return { name: '실버', cls: 't-silver' };            // 14~16등 (3명)
-    if (rankIndex <= 55) return { name: '브론즈', cls: 't-bronze' };          // 17~19등 (3명)
-    return { name: '아이언', cls: 't-iron' };                                 // 20등 이하
+    if (rankIndex <= 12) return { name: '골드', cls: 't-gold' };              // 11~13등 (3명)
+    if (rankIndex <= 15) return { name: '실버', cls: 't-silver' };            // 14~16등 (3명)
+    if (rankIndex <= 18) return { name: '브론즈', cls: 't-bronze' };          // 17~19등 (3명)
+    return { name: '브론즈', cls: 't-bronze' };                                 // 20등 이하
   }
 
   // 3. 🛡️ 무한 복제에도 깨지지 않는 순수 SVG 육각형 레이더 생성 헬퍼
