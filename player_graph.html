@@ -257,13 +257,13 @@
   function getTierData(rankIndex) {
     if (rankIndex === 0) return { name: '챌린저', cls: 't-challenger' };
     if (rankIndex === 1) return { name: '그랜드마스터', cls: 't-grandmaster' };
-    if (rankIndex <= 3) return { name: '마스터', cls: 't-master' };
-    if (rankIndex <= 6) return { name: '다이아몬드', cls: 't-diamond' };
-    if (rankIndex <= 11) return { name: '에메랄드', cls: 't-emerald' };
-    if (rankIndex <= 17) return { name: '플래티넘', cls: 't-platinum' };
-    if (rankIndex <= 24) return { name: '골드', cls: 't-gold' };
-    if (rankIndex <= 32) return { name: '실버', cls: 't-silver' };
-    if (rankIndex <= 41) return { name: '브론즈', cls: 't-bronze' };
+    if (rankIndex <= 2) return { name: '마스터', cls: 't-master' };
+    if (rankIndex <= 5) return { name: '다이아몬드', cls: 't-diamond' };
+    if (rankIndex <= 9) return { name: '에메랄드', cls: 't-emerald' };
+    if (rankIndex <= 14) return { name: '플래티넘', cls: 't-platinum' };
+    if (rankIndex <= 20) return { name: '골드', cls: 't-gold' };
+    if (rankIndex <= 27) return { name: '실버', cls: 't-silver' };
+    if (rankIndex <= 35) return { name: '브론즈', cls: 't-bronze' };
     return { name: '아이언', cls: 't-iron' };
   }
 
