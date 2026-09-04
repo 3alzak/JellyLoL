@@ -253,18 +253,24 @@
     return { tier: 0, cost };
   }
 
-  // 2. 실력점수 순위에 따른 티어 산정
-  function getTierData(rankIndex) {
-    if (rankIndex === 0) return { name: '챌린저', cls: 't-challenger' };
-    if (rankIndex === 1) return { name: '그랜드마스터', cls: 't-grandmaster' };
-    if (rankIndex <= 2) return { name: '마스터', cls: 't-master' };
-    if (rankIndex <= 5) return { name: '다이아몬드', cls: 't-diamond' };
-    if (rankIndex <= 12) return { name: '에메랄드', cls: 't-emerald' };
-    if (rankIndex <= 17) return { name: '플래티넘', cls: 't-platinum' };
-    if (rankIndex <= 20) return { name: '골드', cls: 't-gold' };
-    if (rankIndex <= 27) return { name: '실버', cls: 't-silver' };
-    if (rankIndex <= 37) return { name: '브론즈', cls: 't-bronze' };
-    return { name: '아이언', cls: 't-iron' };
+
+  // 2. 실력점수 순위에 따른 티어 산정 (꼴찌는 무조건 아이언 보장)
+  function getTierData(rankIndex, totalUsers) {
+    // 💡 꼴찌 방어권: 유저 수가 몇 명이든 최하위는 무조건 아이언 박제
+    if (totalUsers && rankIndex === totalUsers - 1) {
+      return { name: '아이언', cls: 't-iron' };
+    }
+
+    if (rankIndex === 0) return { name: '챌린저', cls: 't-challenger' };       // 1명 (1등)
+    if (rankIndex === 1) return { name: '그랜드마스터', cls: 't-grandmaster' };   // 1명 (2등)
+    if (rankIndex <= 2) return { name: '마스터', cls: 't-master' };            // 1명 (3등)
+    if (rankIndex <= 4) return { name: '다이아몬드', cls: 't-diamond' };        // 2명 (4~5등)
+    if (rankIndex <= 6) return { name: '에메랄드', cls: 't-emerald' };         // 2명 (6~7등)
+    if (rankIndex <= 9) return { name: '플래티넘', cls: 't-platinum' };        // 3명 (8~10등)
+    if (rankIndex <= 12) return { name: '골드', cls: 't-gold' };              // 3명 (11~13등)
+    if (rankIndex <= 15) return { name: '실버', cls: 't-silver' };            // 3명 (14~16등)
+    if (rankIndex <= 18) return { name: '브론즈', cls: 't-bronze' };          // 3명 (17~19등)
+    return { name: '아이언', cls: 't-iron' };                                 // 20등 이하
   }
 
   // 3. 🛡️ 무한 복제에도 깨지지 않는 순수 SVG 육각형 레이더 생성 헬퍼
@@ -398,13 +404,14 @@
       .sort((a, b) => Number(b.rating) - Number(a.rating));
 
     // 유저별 스탯 딕셔너리 초기화 (DB의 u.rating 그대로 사용)
+    // 유저별 스탯 딕셔너리 초기화 (DB의 u.rating 그대로 사용)
     const statsMap = {};
     activeUsers.forEach((u, index) => {
       statsMap[u.id] = {
         id: u.id,
         name: u.user_id,
         rating: Number(u.rating ?? 0), // DB 실제 실력점수
-        tierInfo: getTierData(index),
+        tierInfo: getTierData(index, activeUsers.length), // 👈 activeUsers.length 전달
         games: 0, wins: 0, losses: 0,
         kills: 0, deaths: 0, assists: 0, 
         damage: 0, damage_taken: 0, cs: 0, vision: 0, durationMin: 0,
