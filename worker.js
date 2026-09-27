@@ -2240,7 +2240,7 @@ if (url.pathname === '/api/discord/interactions' && request.method === 'POST') {
       return json({
         latest_version: "2.2.0", // 💡 새 버전 배포 시 이 버전을 올려주면 됨
         download_url: "https://jelly-lol.pages.dev/dist/JellyLoL_Setup.exe", // 💡 구글 드라이브 또는 다운로드 웹페이지 URL
-        release_notes: "최종 아이템 7칸 수집 및 2026-2 시즌 전적 자동 동기화 패치"
+        release_notes: "칼바람이 자동업로드 되던 부분 수정"
       });
     }
 
