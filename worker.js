@@ -2238,7 +2238,7 @@ if (url.pathname === '/api/discord/interactions' && request.method === 'POST') {
 // 🚀 GET /api/app/version → 젤리 업로더 최신 버전 및 다운로드 웹 링크 반환
     if (url.pathname === "/api/app/version" && request.method === "GET") {
       return json({
-        latest_version: "2.1.0", // 💡 새 버전 배포 시 이 버전을 올려주면 됨
+        latest_version: "2.2.0", // 💡 새 버전 배포 시 이 버전을 올려주면 됨
         download_url: "https://jelly-lol.pages.dev/dist/JellyLoL_Setup.exe", // 💡 구글 드라이브 또는 다운로드 웹페이지 URL
         release_notes: "최종 아이템 7칸 수집 및 2026-2 시즌 전적 자동 동기화 패치"
       });
