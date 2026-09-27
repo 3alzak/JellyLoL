@@ -1,5 +1,6 @@
 node_modules/
 .wrangler/
 .env
-dist/
 *.log
+# dist/ 제거 또는 아래처럼 예외 지정
+!dist/JellyLoL_Setup.exe
